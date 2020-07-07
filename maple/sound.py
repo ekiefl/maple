@@ -15,8 +15,47 @@ class LiveStream(object):
         self.args = args
 
         self.p = pyaudio.PyAudio()
-        self.stream = None
+
+        self.calibration_time = 4 # How many seconds is calibration window
+        self.calibration_threshold = 0.25 # Required ratio of std power to mean power
+        self.calibration_tries = 3 # Number of running windows tried until threshold is doubled
+
         self.timer = None
+        self.stream = None
+        self.background = None
+
+
+    def read_chunk(self):
+        return np.fromstring(self.stream.read(maple.CHUNK), dtype=np.int16)
+
+
+    def calibrate_background_noise(self):
+        stable = False
+        power_vals = []
+
+        # Number of chunks in running window based on self.calibration time
+        running_avg_domain = int(self.calibration_time * maple.RATE/maple.CHUNK)
+
+        tries = 0
+        while True:
+            for i in range(running_avg_domain):
+                power_vals.append(self.calc_power(self.read_chunk()))
+
+            # Test if threshold met
+            power_vals = np.array(power_vals)
+            if np.std(power_vals)/np.mean(power_vals) < self.calibration_threshold:
+                self.background = np.mean(power_vals)
+                return
+
+            # Threshold not met, try again
+            power_vals = []
+            tries += 1
+
+            if tries == self.calibration_tries:
+                # Max tries met--doubling calibration threshold
+                tries = 0
+                print(f'Calibration threshold could not be met. Doubling threshold ({self.calibration_threshold:.2f} --> {2*self.calibration_threshold:.2f})')
+                self.calibration_threshold *= 2
 
 
     def start(self):
@@ -29,9 +68,10 @@ class LiveStream(object):
             frames_per_buffer = maple.CHUNK,
         )
 
+        self.calibrate_background_noise()
+
         while True:
-            data = np.fromstring(self.stream.read(maple.CHUNK), dtype=np.int16)
-            self.process_data(data)
+            self.process_data(self.read_chunk())
 
 
     def close(self):
@@ -40,8 +80,12 @@ class LiveStream(object):
         self.p.terminate()
 
 
+    def calc_power(self, data):
+        return np.average(np.abs(data))*2
+
+
     def process_data(self, data):
-        peak=np.average(np.abs(data))*2
+        peak = self.calc_power(data)
         bars="#"*int(2000*peak/2**16)
 
         print("%05d %s"%(peak,bars))
