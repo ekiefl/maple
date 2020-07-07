@@ -20,12 +20,6 @@ class LiveStream(object):
 
 
     def start(self):
-        while True:
-            data = np.fromstring(self.stream.read(maple.CHUNK), dtype=np.int16)
-            self.process_data(data)
-
-
-    def __enter__(self):
         self.timer = Timer()
         self.stream = self.p.open(
             format = pyaudio.paInt16,
@@ -35,10 +29,12 @@ class LiveStream(object):
             frames_per_buffer = maple.CHUNK,
         )
 
-        return self
+        while True:
+            data = np.fromstring(self.stream.read(maple.CHUNK), dtype=np.int16)
+            self.process_data(data)
 
 
-    def __exit__(self, exception_type, exception_value, traceback):
+    def close(self):
         self.stream.stop_stream()
         self.stream.close()
         self.p.terminate()
@@ -47,6 +43,7 @@ class LiveStream(object):
     def process_data(self, data):
         peak=np.average(np.abs(data))*2
         bars="#"*int(2000*peak/2**16)
+
         print("%05d %s"%(peak,bars))
         print(self.timer.time_elapsed())
 
@@ -62,48 +59,14 @@ class LiveStream(object):
 
 
 class Timer:
-    """Manages an ordered dictionary, where each key is a checkpoint name and value is a timestamp.
+    """Manages an ordered dictionary, where each key is a checkpoint name and value is a timestamp"""
 
-    Examples
-    ========
-
-    >>> import time
-    >>> t = Timer(); time.sleep(1)
-    >>> t.make_checkpoint('checkpoint_name'); time.sleep(1)
-    >>> timedelta = t.timedelta_to_checkpoint(timestamp=t.timestamp(), checkpoint_key='checkpoint_name')
-    >>> print(t.format_time(timedelta, fmt = '{days} days, {hours} hours, {seconds} seconds', zero_padding=0))
-    >>> print(t.time_elapsed())
-    0 days, 0 hours, 1 seconds
-    00:00:02
-
-    >>> t = Timer(3) # 3 checkpoints expected until completion
-    >>> for _ in range(3):
-    >>>     time.sleep(1); t.make_checkpoint()
-    >>>     print('complete: %s' % t.complete)
-    >>>     print(t.eta(fmt='ETA: {seconds} seconds'))
-    complete: False
-    ETA: 02 seconds
-    complete: False
-    ETA: 01 seconds
-    complete: True
-    ETA: 00 seconds
-    """
-    def __init__(self, required_completion_score=None, initial_checkpoint_key=0, score=0):
+    def __init__(self, initial_checkpoint_key=0):
         self.timer_start = self.timestamp()
         self.initial_checkpoint_key = initial_checkpoint_key
         self.last_checkpoint_key = self.initial_checkpoint_key
         self.checkpoints = OrderedDict([(initial_checkpoint_key, self.timer_start)])
         self.num_checkpoints = 0
-
-        self.required_completion_score = required_completion_score
-        self.score = score
-        self.complete = False
-
-        self.last_eta = None
-        self.last_eta_timestamp = self.timer_start
-
-        self.scores = {self.initial_checkpoint_key: self.score}
-
 
     def timestamp(self):
         return datetime.datetime.fromtimestamp(time.time())
@@ -120,8 +83,8 @@ class Timer:
             checkpoint_key = self.num_checkpoints + 1
 
         if checkpoint_key in self.checkpoints:
-            raise TerminalError('Timer.make_checkpoint :: %s already exists as a checkpoint key. '
-                                'All keys must be unique' % (str(checkpoint_key)))
+            raise ValueError('Timer.make_checkpoint :: %s already exists as a checkpoint key. '
+                             'All keys must be unique' % (str(checkpoint_key)))
 
         checkpoint = self.timestamp()
 
@@ -130,29 +93,7 @@ class Timer:
 
         self.num_checkpoints += 1
 
-        if increment_to:
-            self.score = increment_to
-        else:
-            self.score += 1
-
-        self.scores[checkpoint_key] = self.score
-
-        if self.required_completion_score and self.score >= self.required_completion_score:
-            self.complete = True
-
         return checkpoint
-
-
-    def gen_dataframe_report(self):
-        """Returns a dataframe"""
-
-        d = {'key': [], 'time': [], 'score': []}
-        for checkpoint_key, checkpoint in self.checkpoints.items():
-            d['key'].append(checkpoint_key)
-            d['time'].append(checkpoint)
-            d['score'].append(self.scores[checkpoint_key])
-
-        return pd.DataFrame(d)
 
 
     def time_elapsed(self, fmt=None):
