@@ -1,6 +1,6 @@
 #! /usr/bin/env python
 
-import maple.sound as sound
+import maple.events as events
 
-s = sound.Monitor()
-s.start()
+s = events.Monitor()
+s.setup()
