@@ -56,6 +56,8 @@ class Detector(object):
         self.end_thresh = self.bg_mean + end_thresh*self.bg_std
 
         self.in_event = False
+        self.in_off_transition = False
+        self.in_on_transition = False
 
         self.frames = []
 
@@ -75,29 +77,48 @@ class Detector(object):
                     self.in_off_transition = False
                 else:
                     self.off_time += self.dt
+
             else:
                 if power < self.end_thresh:
                     self.in_off_transition = True
+                    self.off_time = 0
+                else:
+                    pass
 
-
-            if power < self.end_thresh and not self.in_off_transition:
-                self.in_off_transition = True
-                self.off_time = 0
-
-            elif self.off_time > self.seconds:
-
-            elif self.in_off_transition:
-                self.off_time += self.dt
-
-            else:
-                print('          ||')
         else:
-            if power > self.start_thresh:
-                print('####### EVENT START #########')
-                self.in_event = True
-            else:
-                print()
+            if self.in_on_transition:
+                # Not in event
+                if self.on_counter >= self.num_consecutive:
+                    print('####### EVENT START #########')
+                    self.in_event = True
+                    self.in_on_transition = False
 
+                elif power > self.start_thresh:
+                    self.on_counter += 1
+
+                else:
+                    self.in_on_transition = False
+
+            else:
+                if power > self.start_thresh:
+                    self.in_on_transition = True
+                    self.on_counter = 0
+                else:
+                    # Silence
+                    pass
+
+        if self.in_event:
+            if self.in_off_transition:
+                msg = '         | '
+            else:
+                msg = '        |||'
+        else:
+            if self.in_on_transition:
+                msg = '         | '
+            else:
+                msg = ''
+
+        print(msg)
 
 class Monitor(object):
     def __init__(self, args = argparse.Namespace()):
@@ -110,14 +131,14 @@ class Monitor(object):
 
         # Calibration parameters
         self.calibration_time = 3 # How many seconds is calibration window
-        self.calibration_threshold = 0.25 # Required ratio of std power to mean power
-        self.calibration_tries = 3 # Number of running windows tried until threshold is doubled
+        self.calibration_threshold = 0.50 # Required ratio of std power to mean power
+        self.calibration_tries = 1 # Number of running windows tried until threshold is doubled
 
         # Event detection parameters
         self.event_start_threshold = 3 # standard deviations above background noise to start an event
         self.event_end_threshold = 2 # standard deviations above background noise to end an event
-        self.seconds = 2
-        self.num_consecutive = 3
+        self.seconds = 0.5
+        self.num_consecutive = 5
 
         self.timer = None
         self.stream = None
