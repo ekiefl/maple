@@ -61,12 +61,7 @@ class Detector(object):
         self.start_thresh = self.bg_mean + start_thresh*self.bg_std
         self.end_thresh = self.bg_mean + end_thresh*self.bg_std
 
-        self.in_event = False
-        self.in_off_transition = False
-        self.in_on_transition = False
-        self.event_finished = False
-
-        self.frames = []
+        self.reset()
 
 
     def update_event_states(self, power):
@@ -105,7 +100,6 @@ class Detector(object):
                 if power > self.start_thresh:
                     self.in_on_transition = True
                     self.on_counter = 0
-                    self.frames = []
                 else:
                     # Silence
                     pass
@@ -131,6 +125,22 @@ class Detector(object):
         print(msg)
 
 
+    def reset(self):
+        """Reset event states and storage buffer"""
+
+        self.in_event = False
+        self.in_off_transition = False
+        self.in_on_transition = False
+        self.event_finished = False
+
+        self.frames = []
+
+
+    def append_to_buffer(self, data):
+        if self.in_event or self.in_on_transition:
+            self.frames.append(data)
+
+
     def process(self, data):
         """Takes in data and updates event transition variables if need be"""
 
@@ -142,16 +152,12 @@ class Detector(object):
         # Write to stdout if not self.quiet
         self.print_to_stdout()
 
-        if self.event_finished:
-            # Was in an event and is not anymore. Prepare output of event
-            self.frames.append(data)
-            self.event_finished = False
-            return np.concatenate(self.frames)
+        # Append to buffer
+        self.append_to_buffer(data)
 
-        elif self.in_event or self.in_on_transition:
-            self.frames.append(data)
 
-        return None
+    def get_event_data(self):
+        return np.concatenate(self.frames)
 
 
 class Monitor(object):
@@ -180,6 +186,7 @@ class Monitor(object):
         self.background_std = None
 
         self.events = {}
+        self.num_events = 0
 
 
     def read_chunk(self):
@@ -256,8 +263,8 @@ class Monitor(object):
             except KeyboardInterrupt:
                 break
 
-        for timestamp, event in self.events.items():
-            print(self.timer[timestamp])
+        for key, event in self.events.items():
+            print(f"{self.timer.checkpoints[(key, 0)]} -> {self.timer.checkpoints[(key, 1)]}")
             sd.play(event, blocking=True)
 
 
@@ -289,11 +296,22 @@ class Monitor(object):
 
 
     def process_data(self, data):
-        event_data = self.detector.process(data)
-        if event_data is not None:
-            # An event has been recorded
-            self.timer.make_checkpoint()
-            self.events[self.timer.last_checkpoint_key] = event_data
+        prior_state = self.detector.in_event
+
+        self.detector.process(data)
+
+        if self.detector.in_event and not prior_state:
+            # Make checkpoint for start of event
+            self.timer.make_checkpoint((self.num_events, 0))
+
+        elif self.detector.event_finished:
+            # Make checkpoint for end of event
+            self.timer.make_checkpoint((self.num_events, 1))
+
+            self.events[self.num_events] = self.detector.get_event_data()
+
+            self.num_events += 1
+            self.detector.reset()
 
 
 class Timer:
