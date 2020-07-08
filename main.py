@@ -2,5 +2,5 @@
 
 import maple.sound as sound
 
-s = sound.LiveStream()
+s = sound.Monitor()
 s.start()

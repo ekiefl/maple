@@ -10,7 +10,7 @@ import datetime
 from collections import OrderedDict
 
 
-class LiveStream(object):
+class Monitor(object):
     def __init__(self, args = argparse.Namespace()):
         self.args = args
 
@@ -19,6 +19,7 @@ class LiveStream(object):
         self.calibration_time = 4 # How many seconds is calibration window
         self.calibration_threshold = 0.25 # Required ratio of std power to mean power
         self.calibration_tries = 3 # Number of running windows tried until threshold is doubled
+        self.calibration_skip = True
 
         self.timer = None
         self.stream = None
@@ -26,10 +27,23 @@ class LiveStream(object):
 
 
     def read_chunk(self):
+        """Read a chunk from the stream and cast as a numpy array"""
+
         return np.fromstring(self.stream.read(maple.CHUNK), dtype=np.int16)
 
 
     def calibrate_background_noise(self):
+        """Establish a background noise
+
+        Calculates moving windows of power. If the ratio between standard deviation and mean is less
+        than a threshold, signifying a constant level of noise, the mean power is chosen as the
+        background. Otherwise, it is tried again. If it fails too many times, the threshold is
+        doubled and the process is repeated.
+        """
+
+        if self.calibration_skip:
+            return
+
         stable = False
         power_vals = []
 
@@ -59,6 +73,8 @@ class LiveStream(object):
 
 
     def start(self):
+        """Start monitoring audio"""
+
         self.timer = Timer()
         self.stream = self.p.open(
             format = pyaudio.paInt16,
@@ -71,35 +87,41 @@ class LiveStream(object):
         self.calibrate_background_noise()
 
         while True:
-            self.process_data(self.read_chunk())
+            self.stream_power_and_pitch_to_stdout(self.read_chunk())
 
 
     def close(self):
+        """Close the stream gracefully"""
+
         self.stream.stop_stream()
         self.stream.close()
         self.p.terminate()
 
 
     def calc_power(self, data):
+        """Calculate the power of a discrete time signal"""
+
         return np.average(np.abs(data))*2
 
 
-    def process_data(self, data):
-        peak = self.calc_power(data)
-        bars="#"*int(2000*peak/2**16)
+    def stream_power_and_pitch_to_stdout(self, data):
+        """Call for every chunk to create a primitive stream plot of power and pitch to stdout
 
-        print("%05d %s"%(peak,bars))
-        print(self.timer.time_elapsed())
+        Pitch is indicated with 'o' bars, amplitude is indicated with '-'
+        """
 
-        x = data
+        power = self.calc_power(data)
+        bars = "-"*int(1000*power/2**16)
 
-        w = np.fft.fft(x)
-        freqs = np.fft.fftfreq(len(x))
+        print("%05d %s" % (power, bars))
 
-        #max_freq = abs(freqs[np.argmax(w)] * maple.RATE)
-        #peak = max_freq
-        #bars="o"*int(6000*peak/2**16)
-        #print("%05d %s"%(peak,bars))
+        w = np.fft.fft(data)
+        freqs = np.fft.fftfreq(len(data))
+        max_freq = abs(freqs[np.argmax(w)] * maple.RATE)
+        peak = max_freq
+        bars="o"*int(3000*peak/2**16)
+
+        print("%05d %s" % (peak, bars))
 
 
 class Timer:
