@@ -10,20 +10,74 @@ import datetime
 from collections import OrderedDict
 
 
+class Detector(object):
+    def __init__(self, background_std, background, start_thresh, end_thresh):
+        """Manages the detection of events
+
+        Parameters
+        ==========
+        background_std : float
+            The standard deviation of the background noise.
+
+        background : float
+            The mean of the background noise.
+
+        start_thresh : float
+            The number of standard deviations above the background noise that the power must exceed
+            for a data point to be considered as the start of an event.
+
+        end_thresh : float
+            The number of standard deviations above the background noise that the power dip below
+            for a data point to be considered as the end of an event.
+        """
+
+        self.bg_mean = background
+        self.bg_std = background_std
+
+        # Recast the start and end thresholds in terms of power values
+        self.start_thresh = self.bg_mean + start_thresh*self.bg_std
+        self.end_thresh = self.bg_mean + end_thresh*self.bg_std
+
+        self.in_event = False
+
+        self.powers = []
+
+
+    def process(self, power):
+        if self.in_event:
+            if power < self.end_thresh:
+                print('####### EVENT END #########')
+                self.in_event = False
+            else:
+                print('          ||')
+        else:
+            if power > self.start_thresh:
+                print('####### EVENT START #########')
+                self.in_event = True
+            else:
+                print()
+
+
 class Monitor(object):
     def __init__(self, args = argparse.Namespace()):
         self.args = args
 
         self.p = pyaudio.PyAudio()
+        self.detector = None
 
-        self.calibration_time = 4 # How many seconds is calibration window
+        self.dt = maple.CHUNK/maple.RATE # Time between each sample
+
+        self.calibration_time = 3 # How many seconds is calibration window
         self.calibration_threshold = 0.25 # Required ratio of std power to mean power
         self.calibration_tries = 3 # Number of running windows tried until threshold is doubled
-        self.calibration_skip = True
+
+        self.event_start_threshold = 3 # standard deviations above background noise to start an event
+        self.event_end_threshold = 2 # standard deviations above background noise to end an event
 
         self.timer = None
         self.stream = None
         self.background = None
+        self.background_std = None
 
 
     def read_chunk(self):
@@ -38,17 +92,14 @@ class Monitor(object):
         Calculates moving windows of power. If the ratio between standard deviation and mean is less
         than a threshold, signifying a constant level of noise, the mean power is chosen as the
         background. Otherwise, it is tried again. If it fails too many times, the threshold is
-        doubled and the process is repeated.
+        increased and the process is repeated.
         """
-
-        if self.calibration_skip:
-            return
 
         stable = False
         power_vals = []
 
         # Number of chunks in running window based on self.calibration time
-        running_avg_domain = int(self.calibration_time * maple.RATE/maple.CHUNK)
+        running_avg_domain = int(self.calibration_time / self.dt)
 
         tries = 0
         while True:
@@ -59,6 +110,7 @@ class Monitor(object):
             power_vals = np.array(power_vals)
             if np.std(power_vals)/np.mean(power_vals) < self.calibration_threshold:
                 self.background = np.mean(power_vals)
+                self.background_std = np.std(power_vals)
                 return
 
             # Threshold not met, try again
@@ -67,9 +119,9 @@ class Monitor(object):
 
             if tries == self.calibration_tries:
                 # Max tries met--doubling calibration threshold
+                print(f'Calibration threshold not met after {tries} tries. Increasing threshold ({self.calibration_threshold:.2f} --> {1.5*self.calibration_threshold:.2f})')
                 tries = 0
-                print(f'Calibration threshold could not be met. Doubling threshold ({self.calibration_threshold:.2f} --> {2*self.calibration_threshold:.2f})')
-                self.calibration_threshold *= 2
+                self.calibration_threshold *= 1.5
 
 
     def start(self):
@@ -86,8 +138,16 @@ class Monitor(object):
 
         self.calibrate_background_noise()
 
+        self.detector = Detector(
+            background_std = self.background_std,
+            background = self.background,
+            start_thresh = self.event_start_threshold,
+            end_thresh = self.event_end_threshold,
+        )
+
         while True:
-            self.stream_power_and_pitch_to_stdout(self.read_chunk())
+            #self.stream_power_and_pitch_to_stdout(self.read_chunk())
+            self.process_data(self.read_chunk())
 
 
     def close(self):
@@ -101,7 +161,7 @@ class Monitor(object):
     def calc_power(self, data):
         """Calculate the power of a discrete time signal"""
 
-        return np.average(np.abs(data))*2
+        return np.mean(np.abs(data))*2
 
 
     def stream_power_and_pitch_to_stdout(self, data):
@@ -117,11 +177,17 @@ class Monitor(object):
 
         w = np.fft.fft(data)
         freqs = np.fft.fftfreq(len(data))
-        max_freq = abs(freqs[np.argmax(w)] * maple.RATE)
-        peak = max_freq
+        peak = abs(freqs[np.argmax(w)] * maple.RATE)
         bars="o"*int(3000*peak/2**16)
 
         print("%05d %s" % (peak, bars))
+
+
+    def process_data(self, data):
+        power = self.calc_power(data)
+
+        self.detector.process(power)
+
 
 
 class Timer:
@@ -133,6 +199,7 @@ class Timer:
         self.last_checkpoint_key = self.initial_checkpoint_key
         self.checkpoints = OrderedDict([(initial_checkpoint_key, self.timer_start)])
         self.num_checkpoints = 0
+
 
     def timestamp(self):
         return datetime.datetime.fromtimestamp(time.time())
