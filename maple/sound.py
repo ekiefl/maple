@@ -1,7 +1,9 @@
 #! /usr/bin/env python
 
-import time
 import maple
+import maple.utils as utils
+
+import time
 import numpy as np
 import pyaudio
 import argparse
@@ -11,7 +13,7 @@ from collections import OrderedDict
 
 
 class Detector(object):
-    def __init__(self, background_std, background, start_thresh, end_thresh):
+    def __init__(self, background_std, background, start_thresh, end_thresh, num_consecutive, seconds, dt):
         """Manages the detection of events
 
         Parameters
@@ -29,10 +31,25 @@ class Detector(object):
         end_thresh : float
             The number of standard deviations above the background noise that the power dip below
             for a data point to be considered as the end of an event.
+
+        num_consecutive : int
+            The number of frames needed that must consecutively be above the threshold to be
+            considered the start of an event.
+
+        seconds : float
+            The number of seconds that must pass after the `end_thresh` condition is met in order for
+            the event to end. If, during this time, the `start_thresh` condition is met
+            `num_consecutive` consecutive frames, the ending of the event will be cancelled.
+
+        dt : float
+            The inverse sampling frequency, i.e the time captured by each frame.
         """
 
-        self.bg_mean = background
+        self.dt = dt
         self.bg_std = background_std
+        self.bg_mean = background
+        self.seconds = seconds
+        self.num_consecutive = num_consecutive
 
         # Recast the start and end thresholds in terms of power values
         self.start_thresh = self.bg_mean + start_thresh*self.bg_std
@@ -40,10 +57,14 @@ class Detector(object):
 
         self.in_event = False
 
-        self.powers = []
+        self.frames = []
 
 
-    def process(self, power):
+    def process(self, data):
+        """Takes in data and updates event transition variables if need be"""
+
+        power = utils.calc_power(data)
+
         if self.in_event:
             if power < self.end_thresh:
                 print('####### EVENT END #########')
@@ -67,12 +88,16 @@ class Monitor(object):
 
         self.dt = maple.CHUNK/maple.RATE # Time between each sample
 
+        # Calibration parameters
         self.calibration_time = 3 # How many seconds is calibration window
         self.calibration_threshold = 0.25 # Required ratio of std power to mean power
         self.calibration_tries = 3 # Number of running windows tried until threshold is doubled
 
+        # Event detection parameters
         self.event_start_threshold = 3 # standard deviations above background noise to start an event
         self.event_end_threshold = 2 # standard deviations above background noise to end an event
+        self.seconds = 2
+        self.num_consecutive = 3
 
         self.timer = None
         self.stream = None
@@ -104,7 +129,7 @@ class Monitor(object):
         tries = 0
         while True:
             for i in range(running_avg_domain):
-                power_vals.append(self.calc_power(self.read_chunk()))
+                power_vals.append(utils.calc_power(self.read_chunk()))
 
             # Test if threshold met
             power_vals = np.array(power_vals)
@@ -143,6 +168,9 @@ class Monitor(object):
             background = self.background,
             start_thresh = self.event_start_threshold,
             end_thresh = self.event_end_threshold,
+            seconds = self.seconds,
+            num_consecutive = self.num_consecutive,
+            dt = self.dt,
         )
 
         while True:
@@ -158,19 +186,13 @@ class Monitor(object):
         self.p.terminate()
 
 
-    def calc_power(self, data):
-        """Calculate the power of a discrete time signal"""
-
-        return np.mean(np.abs(data))*2
-
-
     def stream_power_and_pitch_to_stdout(self, data):
         """Call for every chunk to create a primitive stream plot of power and pitch to stdout
 
         Pitch is indicated with 'o' bars, amplitude is indicated with '-'
         """
 
-        power = self.calc_power(data)
+        power = utils.calc_power(data)
         bars = "-"*int(1000*power/2**16)
 
         print("%05d %s" % (power, bars))
@@ -184,9 +206,7 @@ class Monitor(object):
 
 
     def process_data(self, data):
-        power = self.calc_power(data)
-
-        self.detector.process(power)
+        self.detector.process(data)
 
 
 
