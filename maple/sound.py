@@ -8,12 +8,13 @@ import numpy as np
 import pyaudio
 import argparse
 import datetime
+import sounddevice as sd
 
 from collections import OrderedDict
 
 
 class Detector(object):
-    def __init__(self, background_std, background, start_thresh, end_thresh, num_consecutive, seconds, dt):
+    def __init__(self, background_std, background, start_thresh, end_thresh, num_consecutive, seconds, dt, quiet=False):
         """Manages the detection of events
 
         Parameters
@@ -43,7 +44,12 @@ class Detector(object):
 
         dt : float
             The inverse sampling frequency, i.e the time captured by each frame.
+
+        quiet : bool
+            If True, nothing is sent to stdout
         """
+
+        self.quiet = quiet
 
         self.dt = dt
         self.bg_std = background_std
@@ -58,54 +64,58 @@ class Detector(object):
         self.in_event = False
         self.in_off_transition = False
         self.in_on_transition = False
+        self.event_finished = False
 
         self.frames = []
 
 
-    def process(self, data):
-        """Takes in data and updates event transition variables if need be"""
-
-        power = utils.calc_power(data)
+    def update_event_states(self, power):
+        """Update event states based on their current states plus the power of the current frame"""
 
         if self.in_event:
             if self.in_off_transition:
                 if self.off_time > self.seconds:
-                    print('####### EVENT END #########')
+                    if not self.quiet: print('####### EVENT END #########')
                     self.in_event = False
                     self.in_off_transition = False
+                    self.event_finished = True
                 elif power > self.start_thresh:
                     self.in_off_transition = False
                 else:
                     self.off_time += self.dt
-
             else:
                 if power < self.end_thresh:
                     self.in_off_transition = True
                     self.off_time = 0
                 else:
                     pass
-
         else:
             if self.in_on_transition:
                 # Not in event
                 if self.on_counter >= self.num_consecutive:
-                    print('####### EVENT START #########')
+                    if not self.quiet: print('####### EVENT START #########')
                     self.in_event = True
                     self.in_on_transition = False
-
                 elif power > self.start_thresh:
                     self.on_counter += 1
-
                 else:
                     self.in_on_transition = False
-
+                    self.frames = []
             else:
                 if power > self.start_thresh:
                     self.in_on_transition = True
                     self.on_counter = 0
+                    self.frames = []
                 else:
                     # Silence
                     pass
+
+
+    def print_to_stdout(self):
+        """Prints to standard out to create a text-based stream of event detection"""
+
+        if self.quiet:
+            return
 
         if self.in_event:
             if self.in_off_transition:
@@ -119,6 +129,30 @@ class Detector(object):
                 msg = ''
 
         print(msg)
+
+
+    def process(self, data):
+        """Takes in data and updates event transition variables if need be"""
+
+        # Calculate power of frame
+        power = utils.calc_power(data)
+
+        self.update_event_states(power)
+
+        # Write to stdout if not self.quiet
+        self.print_to_stdout()
+
+        if self.event_finished:
+            # Was in an event and is not anymore. Prepare output of event
+            self.frames.append(data)
+            self.event_finished = False
+            return np.concatenate(self.frames)
+
+        elif self.in_event or self.in_on_transition:
+            self.frames.append(data)
+
+        return None
+
 
 class Monitor(object):
     def __init__(self, args = argparse.Namespace()):
@@ -144,6 +178,8 @@ class Monitor(object):
         self.stream = None
         self.background = None
         self.background_std = None
+
+        self.events = {}
 
 
     def read_chunk(self):
@@ -215,8 +251,14 @@ class Monitor(object):
         )
 
         while True:
-            #self.stream_power_and_pitch_to_stdout(self.read_chunk())
-            self.process_data(self.read_chunk())
+            try:
+                self.process_data(self.read_chunk())
+            except KeyboardInterrupt:
+                break
+
+        for timestamp, event in self.events.items():
+            print(self.timer[timestamp])
+            sd.play(event, blocking=True)
 
 
     def close(self):
@@ -247,8 +289,11 @@ class Monitor(object):
 
 
     def process_data(self, data):
-        self.detector.process(data)
-
+        event_data = self.detector.process(data)
+        if event_data is not None:
+            # An event has been recorded
+            self.timer.make_checkpoint()
+            self.events[self.timer.last_checkpoint_key] = event_data
 
 
 class Timer:
