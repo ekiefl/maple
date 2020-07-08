@@ -37,9 +37,9 @@ class Detector(object):
             considered the start of an event.
 
         seconds : float
-            The number of seconds that must pass after the `end_thresh` condition is met in order for
-            the event to end. If, during this time, the `start_thresh` condition is met
-            `num_consecutive` consecutive frames, the ending of the event will be cancelled.
+            The number of seconds that must pass after the `end_thresh` condition is met in order
+            for the event to end. If, during this time, the `start_thresh` condition is met, the
+            ending of the event will be cancelled.
 
         dt : float
             The inverse sampling frequency, i.e the time captured by each frame.
@@ -66,9 +66,29 @@ class Detector(object):
         power = utils.calc_power(data)
 
         if self.in_event:
-            if power < self.end_thresh:
-                print('####### EVENT END #########')
-                self.in_event = False
+            if self.in_off_transition:
+                if self.off_time > self.seconds:
+                    print('####### EVENT END #########')
+                    self.in_event = False
+                    self.in_off_transition = False
+                elif power > self.start_thresh:
+                    self.in_off_transition = False
+                else:
+                    self.off_time += self.dt
+            else:
+                if power < self.end_thresh:
+                    self.in_off_transition = True
+
+
+            if power < self.end_thresh and not self.in_off_transition:
+                self.in_off_transition = True
+                self.off_time = 0
+
+            elif self.off_time > self.seconds:
+
+            elif self.in_off_transition:
+                self.off_time += self.dt
+
             else:
                 print('          ||')
         else:
