@@ -1,6 +1,7 @@
 #! /usr/bin/env python
 
-import maple.events as events
+import maple.routines as routines
 
-s = events.Monitor()
-s.setup()
+s = routines.RecordOwnerVoice()
+s.run()
+

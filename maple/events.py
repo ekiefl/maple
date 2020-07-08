@@ -2,12 +2,16 @@
 
 import maple
 import maple.utils as utils
+import maple.audio as audio
 
+import time
 import numpy as np
 import pyaudio
 import argparse
 import sounddevice as sd
 
+from pathlib import Path
+from scipy.io.wavfile import write as wav_write
 
 class Stream(object):
     def __init__(self):
@@ -41,131 +45,6 @@ class Stream(object):
             self._stream.stop_stream()
         self._stream.close()
         self.p.terminate()
-
-
-class Monitor(object):
-    def __init__(self, args = argparse.Namespace()):
-        self.args = args
-
-        self.dt = maple.CHUNK/maple.RATE # Time between each sample
-
-        # Calibration parameters
-        self.calibration_time = 3 # How many seconds is calibration window
-        self.calibration_threshold = 0.50 # Required ratio of std power to mean power
-        self.calibration_tries = 1 # Number of running windows tried until threshold is doubled
-
-        # Event detection parameters
-        self.event_start_threshold = 3 # standard deviations above background noise to start an event
-        self.event_end_threshold = 2 # standard deviations above background noise to end an event
-        self.seconds = 0.5
-        self.num_consecutive = 4
-
-        self.timer = None
-        self.stream = None
-        self.background = None
-        self.background_std = None
-
-        self.detector = None
-        self.event_recs = {}
-        self.num_events = 0
-
-
-    def read_chunk(self):
-        """Read a chunk from the stream and cast as a numpy array"""
-
-        return np.fromstring(self.stream._stream.read(maple.CHUNK), dtype=np.int16)
-
-
-    def calibrate_background_noise(self):
-        """Establish a background noise
-
-        Calculates moving windows of power. If the ratio between standard deviation and mean is less
-        than a threshold, signifying a constant level of noise, the mean power is chosen as the
-        background. Otherwise, it is tried again. If it fails too many times, the threshold is
-        increased and the process is repeated.
-        """
-
-        stable = False
-        power_vals = []
-
-        # Number of chunks in running window based on self.calibration time
-        running_avg_domain = int(self.calibration_time / self.dt)
-
-        with self.stream:
-            tries = 0
-            while True:
-                for i in range(running_avg_domain):
-                    power_vals.append(utils.calc_power(self.read_chunk()))
-
-                # Test if threshold met
-                power_vals = np.array(power_vals)
-                if np.std(power_vals)/np.mean(power_vals) < self.calibration_threshold:
-                    self.background = np.mean(power_vals)
-                    self.background_std = np.std(power_vals)
-                    return
-
-                # Threshold not met, try again
-                power_vals = []
-                tries += 1
-
-                if tries == self.calibration_tries:
-                    # Max tries met--doubling calibration threshold
-                    print(f'Calibration threshold not met after {tries} tries. Increasing threshold ({self.calibration_threshold:.2f} --> {1.5*self.calibration_threshold:.2f})')
-                    tries = 0
-                    self.calibration_threshold *= 1.5
-
-
-    def setup(self):
-        self.timer = utils.Timer()
-        self.stream = Stream()
-
-        self.calibrate_background_noise()
-
-        self.detector = Detector(
-            background_std = self.background_std,
-            background = self.background,
-            start_thresh = self.event_start_threshold,
-            end_thresh = self.event_end_threshold,
-            seconds = self.seconds,
-            num_consecutive = self.num_consecutive,
-            dt = self.dt,
-        )
-
-        self.wait_for_event()
-
-
-    def wait_for_event(self, log=True):
-        """Waits for an event, records the event, and returns the event audio as numpy array"""
-
-        self.detector.reset()
-
-        with self.stream:
-            while True:
-                self.detector.process(self.read_chunk())
-
-                if self.detector.event_finished:
-                    break
-
-        return self.detector.get_event_data()
-
-
-    def stream_power_and_pitch_to_stdout(self, data):
-        """Call for every chunk to create a primitive stream plot of power and pitch to stdout
-
-        Pitch is indicated with 'o' bars, amplitude is indicated with '-'
-        """
-
-        power = utils.calc_power(data)
-        bars = "-"*int(1000*power/2**16)
-
-        print("%05d %s" % (power, bars))
-
-        w = np.fft.fft(data)
-        freqs = np.fft.fftfreq(len(data))
-        peak = abs(freqs[np.argmax(w)] * maple.RATE)
-        bars="o"*int(3000*peak/2**16)
-
-        print("%05d %s" % (peak, bars))
 
 
 class Detector(object):
@@ -320,5 +199,131 @@ class Detector(object):
 
     def get_event_data(self):
         return np.concatenate(self.frames)
+
+
+class Monitor(object):
+    def __init__(self, args = argparse.Namespace(), quiet=False):
+        self.args = args
+
+        self.quiet = quiet
+
+        self.dt = maple.CHUNK/maple.RATE # Time between each sample
+
+        # Calibration parameters
+        self.calibration_time = 3 # How many seconds is calibration window
+        self.calibration_threshold = 0.50 # Required ratio of std power to mean power
+        self.calibration_tries = 1 # Number of running windows tried until threshold is doubled
+
+        # Event detection parameters
+        self.event_start_threshold = 3 # standard deviations above background noise to start an event
+        self.event_end_threshold = 2 # standard deviations above background noise to end an event
+        self.seconds = 0.5
+        self.num_consecutive = 4
+
+        self.timer = None
+        self.stream = None
+        self.background = None
+        self.background_std = None
+
+        self.detector = None
+        self.event_recs = {}
+        self.num_events = 0
+
+
+    def read_chunk(self):
+        """Read a chunk from the stream and cast as a numpy array"""
+
+        return np.fromstring(self.stream._stream.read(maple.CHUNK), dtype=np.int16)
+
+
+    def calibrate_background_noise(self):
+        """Establish a background noise
+
+        Calculates moving windows of power. If the ratio between standard deviation and mean is less
+        than a threshold, signifying a constant level of noise, the mean power is chosen as the
+        background. Otherwise, it is tried again. If it fails too many times, the threshold is
+        increased and the process is repeated.
+        """
+
+        stable = False
+        power_vals = []
+
+        # Number of chunks in running window based on self.calibration time
+        running_avg_domain = int(self.calibration_time / self.dt)
+
+        with self.stream:
+            tries = 0
+            while True:
+                for i in range(running_avg_domain):
+                    power_vals.append(utils.calc_power(self.read_chunk()))
+
+                # Test if threshold met
+                power_vals = np.array(power_vals)
+                if np.std(power_vals)/np.mean(power_vals) < self.calibration_threshold:
+                    self.background = np.mean(power_vals)
+                    self.background_std = np.std(power_vals)
+                    return
+
+                # Threshold not met, try again
+                power_vals = []
+                tries += 1
+
+                if tries == self.calibration_tries:
+                    # Max tries met--doubling calibration threshold
+                    print(f'Calibration threshold not met after {tries} tries. Increasing threshold ({self.calibration_threshold:.2f} --> {1.5*self.calibration_threshold:.2f})')
+                    tries = 0
+                    self.calibration_threshold *= 1.5
+
+
+    def setup(self):
+        self.timer = utils.Timer()
+        self.stream = Stream()
+
+        self.calibrate_background_noise()
+
+        self.detector = Detector(
+            background_std = self.background_std,
+            background = self.background,
+            start_thresh = self.event_start_threshold,
+            end_thresh = self.event_end_threshold,
+            seconds = self.seconds,
+            num_consecutive = self.num_consecutive,
+            dt = self.dt,
+            quiet = self.quiet,
+        )
+
+
+    def wait_for_event(self, log=True):
+        """Waits for an event, records the event, and returns the event audio as numpy array"""
+
+        self.detector.reset()
+
+        with self.stream:
+            while True:
+                self.detector.process(self.read_chunk())
+
+                if self.detector.event_finished:
+                    break
+
+        return self.detector.get_event_data()
+
+
+    def stream_power_and_pitch_to_stdout(self, data):
+        """Call for every chunk to create a primitive stream plot of power and pitch to stdout
+
+        Pitch is indicated with 'o' bars, amplitude is indicated with '-'
+        """
+
+        power = utils.calc_power(data)
+        bars = "-"*int(1000*power/2**16)
+
+        print("%05d %s" % (power, bars))
+
+        w = np.fft.fft(data)
+        freqs = np.fft.fftfreq(len(data))
+        peak = abs(freqs[np.argmax(w)] * maple.RATE)
+        bars="o"*int(3000*peak/2**16)
+
+        print("%05d %s" % (peak, bars))
 
 
