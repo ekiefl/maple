@@ -8,22 +8,6 @@ import scipy.signal as signal
 import matplotlib.pyplot as plt
 
 
-def butter_bandpass(lowcut, highcut, fs=None, order=5):
-    if not fs: fs = maple.RATE
-    nyq = 0.5 * fs
-    low = lowcut / nyq
-    high = highcut / nyq
-    b, a = signal.butter(order, [low, high], btype='band')
-    return b, a
-
-
-def butter_bandpass_filter(data, lowcut, highcut, fs=None, order=5):
-    if not fs: fs = maple.RATE
-    b, a = butter_bandpass(lowcut, highcut, fs, order=order)
-    y = signal.lfilter(b, a, data)
-    return y
-
-
 def PSD(data, fs=None):
     if not fs: fs = maple.RATE
     return signal.welch(data, maple.RATE, scaling='spectrum')
@@ -38,4 +22,31 @@ def plot_PSD(data, fs=None):
     plt.ylabel('PSD')
     plt.grid()
     plt.show()
+
+
+def denoise(data, bg_data):
+    fft_data = np.fft.rfft(data)
+    fft_bg_data = np.fft.rfft(bg_data, n=len(data))
+
+    return np.fft.irfft(fft_data - fft_bg_data).astype(data.dtype)
+
+
+def bandpass(data, lowcut, highcut):
+    sos = signal.butter(10, [lowcut, highcut], 'bandpass', fs=maple.RATE, output='sos')
+    return signal.sosfilt(sos, data).astype(data.dtype)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

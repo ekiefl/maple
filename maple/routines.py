@@ -2,8 +2,14 @@
 
 import maple
 import maple.events as events
+import maple.audio as audio
 
 import time
+import sounddevice as sd
+
+from scipy.io.wavfile import read as wav_read
+from scipy.io.wavfile import write as wav_write
+
 
 class RecordOwnerVoice(events.Monitor):
     """Initiate this class to record and store audio clips to yell at your dog"""
@@ -78,6 +84,9 @@ class RecordOwnerVoice(events.Monitor):
     def review_handle(self, response):
         if response == 'l':
             print('Played recording...')
+            print(self.recording.dtype)
+            self.recording = audio.denoise(self.recording, self.background_audio)
+            self.recording = audio.bandpass(self.recording, self.background_audio)
             sd.play(self.recording, blocking=True)
         elif response == 'r':
             print('Listening for voice input...')

@@ -11,6 +11,7 @@ import argparse
 import sounddevice as sd
 
 from pathlib import Path
+from scipy.io.wavfile import read as wav_read
 from scipy.io.wavfile import write as wav_write
 
 class Stream(object):
@@ -224,6 +225,7 @@ class Monitor(object):
         self.stream = None
         self.background = None
         self.background_std = None
+        self.background_audio = None
 
         self.detector = None
         self.event_recs = {}
@@ -247,25 +249,31 @@ class Monitor(object):
 
         stable = False
         power_vals = []
+        audio = []
 
-        # Number of chunks in running window based on self.calibration time
+        # Number of chunks in running window based on self.calibration_time
         running_avg_domain = int(self.calibration_time / self.dt)
 
         with self.stream:
             tries = 0
             while True:
                 for i in range(running_avg_domain):
-                    power_vals.append(utils.calc_power(self.read_chunk()))
+                    data = self.read_chunk()
+                    power_vals.append(utils.calc_power(data))
+                    audio.append(data)
 
                 # Test if threshold met
                 power_vals = np.array(power_vals)
                 if np.std(power_vals)/np.mean(power_vals) < self.calibration_threshold:
                     self.background = np.mean(power_vals)
                     self.background_std = np.std(power_vals)
+
+                    self.background_audio = np.concatenate(audio)
                     return
 
                 # Threshold not met, try again
                 power_vals = []
+                audio = []
                 tries += 1
 
                 if tries == self.calibration_tries:
