@@ -1,7 +1,8 @@
 #! /usr/bin/env python
 
-from pathlib import Path
 import sounddevice as sd
+
+from pathlib import Path
 
 CHUNK = 2**11
 RATE = 44100

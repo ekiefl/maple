@@ -1,14 +1,13 @@
 #! /usr/bin/env python
 
 import maple
-import maple.events as events
 import maple.audio as audio
+import maple.events as events
+
+from maple.owner_recordings import OwnerRecordings
 
 import time
 import sounddevice as sd
-
-from scipy.io.wavfile import read as wav_read
-from scipy.io.wavfile import write as wav_write
 
 
 class RecordOwnerVoice(events.Monitor):
@@ -19,7 +18,7 @@ class RecordOwnerVoice(events.Monitor):
 
         self.menu = {
             'home': {
-                'msg': 'Press [r] to record a new sound, [d] to delete all. Press [q] to quit. Response: ',
+                'msg': 'Press [r] to record a new sound, Press [q] to quit. Response: ',
                 'function': self.menu_handle,
             },
             'review': {
@@ -35,11 +34,8 @@ class RecordOwnerVoice(events.Monitor):
         self.state = 'home'
         self.recording = None
 
-        maple.owner_recordings_dir.mkdir(exist_ok=True)
-        self.wav_files = list(maple.owner_recordings_dir.glob('*wav'))
-        self.num_recordings = len(self.wav_files)
-
-        print(f"You have {self.num_recordings} recordings.")
+        self.recs = OwnerRecordings()
+        print(f"You have {self.recs.num} recordings.")
 
 
     def run(self):
@@ -67,26 +63,12 @@ class RecordOwnerVoice(events.Monitor):
             print('invalid input')
 
 
-    def delete_handle(self, response):
-        if response == 'y':
-            print('Deleted all voice recordings...')
-            self.delete_all()
-            self.state = 'home'
-        elif response == 'n':
-            print('Nothing deleted...')
-            self.state = 'home'
-        elif response == 'q':
-            self.state = 'done'
-        else:
-            print('invalid input')
-
-
     def review_handle(self, response):
         if response == 'l':
             print('Played recording...')
             print(self.recording.dtype)
             self.recording = audio.denoise(self.recording, self.background_audio)
-            self.recording = audio.bandpass(self.recording, self.background_audio)
+            self.recording = audio.bandpass(self.recording, 150, 20000)
             sd.play(self.recording, blocking=True)
         elif response == 'r':
             print('Listening for voice input...')
@@ -107,13 +89,9 @@ class RecordOwnerVoice(events.Monitor):
         elif response == 'q':
             self.state = 'done'
         else:
-            self.store(response)
+            self.recs.write(response, self.recording)
             print('Stored voice input...')
             print(f"You now have {self.num_recordings} recordings.")
             self.state = 'home'
 
-
-    def store(self, name):
-        wav_write(maple.owner_recordings_dir/(name+'.wav'), maple.RATE, self.recording)
-        self.num_recordings += 1
 
