@@ -1,6 +1,7 @@
 #! /usr/bin/env python
 
 import maple
+import sounddevice as sd
 
 from pathlib import Path
 
@@ -14,6 +15,7 @@ class OwnerRecordings(object):
         self.dir.mkdir(exist_ok=True)
 
         self.recs = list(self.dir.glob('*.wav'))
+        self.names = [x.stem for x in self.recs]
         self.num = len(self.recs)
 
         self.arrays = {}
@@ -39,10 +41,20 @@ class OwnerRecordings(object):
 
         self.num += 1
         self.recs.append(output)
+        self.load()
 
 
     def load(self):
         for rec in self.recs:
             _, data = wav_read(rec)
             self.arrays[rec.stem] = data
+
+
+    def play(self, name):
+        sd.play(self.arrays[name])
+
+
+    def play_random(self):
+        self.play(np.random.choice(self.names))
+
 
