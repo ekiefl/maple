@@ -1,6 +1,7 @@
 #! /usr/bin/env python
 
 import maple
+import numpy as np
 import sounddevice as sd
 
 from pathlib import Path

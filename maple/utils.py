@@ -1,5 +1,7 @@
 #! /usr/bin/env python
 
+import maple
+
 import time
 import numpy as np
 import datetime
@@ -7,10 +9,33 @@ import datetime
 from collections import OrderedDict
 
 
-def calc_power(data):
-    """Calculate the power of a discrete time signal"""
+def calc_energy(data):
+    """Calculate the energy of a discrete time signal"""
 
-    return np.mean(np.abs(data))*2
+    data = data/maple.RATE
+    return np.sum(data**2)
+
+
+def calc_mean_pressure(data):
+    """Calculate the mean absolute pressure of a discrete time signal"""
+
+    data = data/maple.RATE
+    return np.mean(np.abs(data))
+
+
+def calc_total_pressure(data):
+    """Calculate the sum of absolute pressure of a discrete time signal"""
+
+    data = data/maple.RATE
+    return np.sum(np.abs(data))
+
+
+def convert_array_to_blob(array, compress=True):
+    return memoryview(array)
+
+
+def convert_blob_to_array(blob, dtype=maple.ARRAY_DTYPE, decompress=True):
+    return np.frombuffer(blob, dtype=dtype)
 
 
 class Timer:

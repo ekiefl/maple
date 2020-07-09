@@ -2,16 +2,17 @@
 
 import maple
 import maple.audio as audio
+import maple.utils as utils
 import maple.events as events
 
 from maple.data import DataBase
 from maple.owner_recordings import OwnerRecordings
 
 import time
+import datetime
 import pandas as pd
 import argparse
 import sounddevice as sd
-
 
 class MonitorDog(events.Monitor):
     """Monitor your dog"""
@@ -24,7 +25,15 @@ class MonitorDog(events.Monitor):
         self.events = pd.DataFrame({}, columns=self.cols)
 
         self.buffer_size = 0
-        self.max_buffer_size = 1
+        self.max_buffer_size = 100
+
+        self.timer = utils.Timer()
+
+        self.response_thresh = 3
+        self.response_time = datetime.timedelta(seconds=10)
+
+        self.owner = OwnerRecordings()
+        self.owner.load()
 
 
     def store_buffer(self):
@@ -36,10 +45,19 @@ class MonitorDog(events.Monitor):
     def add_event(self, data):
         """Add event to self.events, taking the event audio (numpy array) as input"""
 
+        energy = utils.calc_energy(data)
+        t_in_sec = self.detector.timer.time_between_checkpoints('finish', 'start')
+
         event = {
             't_start': self.detector.timer.checkpoints['start'],
             't_end': self.detector.timer.checkpoints['finish'],
-            't_len': self.detector.timer.time_between_checkpoints('finish', 'start'),
+            't_len': t_in_sec,
+            'energy': energy,
+            'power': energy/t_in_sec,
+            'pressure_mean': utils.calc_mean_pressure(data),
+            'pressure_sum': utils.calc_total_pressure(data),
+            'class': None, # TODO
+            'audio': utils.convert_array_to_blob(data),
         }
 
         self.events = self.events.append(event, ignore_index=True)
@@ -54,6 +72,20 @@ class MonitorDog(events.Monitor):
 
         while True:
             self.add_event(self.wait_for_event())
+
+            if self.intervene():
+                self.respond()
+
+
+    def intervene(self):
+        events_in_window = self.events[self.timer.timestamp()-self.events['t_start'] < self.response_time]
+
+        if events_in_window.shape[0] >= self.response_thresh:
+            return True
+
+
+    def respond(self):
+        self.owner.play_random()
 
 
 

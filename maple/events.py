@@ -61,11 +61,11 @@ class Detector(object):
             The mean of the background noise.
 
         start_thresh : float
-            The number of standard deviations above the background noise that the power must exceed
+            The number of standard deviations above the background noise that the pressure must exceed
             for a data point to be considered as the start of an event.
 
         end_thresh : float
-            The number of standard deviations above the background noise that the power dip below
+            The number of standard deviations above the background noise that the pressure dip below
             for a data point to be considered as the end of an event.
 
         num_consecutive : int
@@ -92,15 +92,15 @@ class Detector(object):
         self.seconds = seconds
         self.num_consecutive = num_consecutive
 
-        # Recast the start and end thresholds in terms of power values
+        # Recast the start and end thresholds in terms of pressure values
         self.start_thresh = self.bg_mean + start_thresh*self.bg_std
         self.end_thresh = self.bg_mean + end_thresh*self.bg_std
 
         self.reset()
 
 
-    def update_event_states(self, power):
-        """Update event states based on their current states plus the power of the current frame"""
+    def update_event_states(self, pressure):
+        """Update event states based on their current states plus the pressure of the current frame"""
 
         if self.event_started:
             self.event_started = False
@@ -111,12 +111,12 @@ class Detector(object):
                     self.in_event = False
                     self.in_off_transition = False
                     self.event_finished = True
-                elif power > self.start_thresh:
+                elif pressure > self.start_thresh:
                     self.in_off_transition = False
                 else:
                     self.off_time += self.dt
             else:
-                if power < self.end_thresh:
+                if pressure < self.end_thresh:
                     self.in_off_transition = True
                     self.off_time = 0
                 else:
@@ -128,13 +128,13 @@ class Detector(object):
                     self.in_event = True
                     self.in_on_transition = False
                     self.event_started = True
-                elif power > self.start_thresh:
+                elif pressure > self.start_thresh:
                     self.on_counter += 1
                 else:
                     self.in_on_transition = False
                     self.frames = []
             else:
-                if power > self.start_thresh:
+                if pressure > self.start_thresh:
                     self.in_on_transition = True
                     self.on_counter = 0
                 else:
@@ -187,10 +187,10 @@ class Detector(object):
     def process(self, data):
         """Takes in data and updates event transition variables if need be"""
 
-        # Calculate power of frame
-        power = utils.calc_power(data)
+        # Calculate pressure of frame
+        pressure = utils.calc_mean_pressure(data)
 
-        self.update_event_states(power)
+        self.update_event_states(pressure)
 
         if self.event_started:
             self.timer = utils.Timer('start')
@@ -216,11 +216,11 @@ class Monitor(object):
         A = lambda x: self.args.__dict__.get(x, None)
         self.quiet = A('quiet') or quiet
         self.calibration_time = A('calibration_time') or 3 # How many seconds is calibration window
-        self.calibration_threshold = A('calibration_threshold') or 0.50 # Required ratio of std power to mean power
+        self.calibration_threshold = A('calibration_threshold') or 0.50 # Required ratio of std pressure to mean pressure
         self.calibration_tries = A('calibration_tries') or 1 # Number of running windows tried until threshold is doubled
         self.event_start_threshold = A('event_start_threshold') or 3 # standard deviations above background noise to start an event
         self.event_end_threshold = A('event_end_threshold') or 2 # standard deviations above background noise to end an event
-        self.seconds = A('seconds') or 0.5 # see Detector docstring
+        self.seconds = A('seconds') or 0.25 # see Detector docstring
         self.num_consecutive = A('num_consecutive') or 4 # see Detector docstring
 
         self.stream = None
@@ -238,20 +238,20 @@ class Monitor(object):
     def read_chunk(self):
         """Read a chunk from the stream and cast as a numpy array"""
 
-        return np.fromstring(self.stream._stream.read(maple.CHUNK), dtype=np.int16)
+        return np.fromstring(self.stream._stream.read(maple.CHUNK), dtype=maple.ARRAY_DTYPE)
 
 
     def calibrate_background_noise(self):
         """Establish a background noise
 
-        Calculates moving windows of power. If the ratio between standard deviation and mean is less
-        than a threshold, signifying a constant level of noise, the mean power is chosen as the
+        Calculates moving windows of pressure. If the ratio between standard deviation and mean is less
+        than a threshold, signifying a constant level of noise, the mean pressure is chosen as the
         background. Otherwise, it is tried again. If it fails too many times, the threshold is
         increased and the process is repeated.
         """
 
         stable = False
-        power_vals = []
+        pressure_vals = []
         audio = []
 
         # Number of chunks in running window based on self.calibration_time
@@ -262,20 +262,20 @@ class Monitor(object):
             while True:
                 for i in range(running_avg_domain):
                     data = self.read_chunk()
-                    power_vals.append(utils.calc_power(data))
+                    pressure_vals.append(utils.calc_mean_pressure(data))
                     audio.append(data)
 
                 # Test if threshold met
-                power_vals = np.array(power_vals)
-                if np.std(power_vals)/np.mean(power_vals) < self.calibration_threshold:
-                    self.background = np.mean(power_vals)
-                    self.background_std = np.std(power_vals)
+                pressure_vals = np.array(pressure_vals)
+                if np.std(pressure_vals)/np.mean(pressure_vals) < self.calibration_threshold:
+                    self.background = np.mean(pressure_vals)
+                    self.background_std = np.std(pressure_vals)
 
                     self.background_audio = np.concatenate(audio)
                     return
 
                 # Threshold not met, try again
-                power_vals = []
+                pressure_vals = []
                 audio = []
                 tries += 1
 
@@ -322,16 +322,16 @@ class Monitor(object):
         return self.detector.get_event_data()
 
 
-    def stream_power_and_pitch_to_stdout(self, data):
-        """Call for every chunk to create a primitive stream plot of power and pitch to stdout
+    def stream_pressure_and_pitch_to_stdout(self, data):
+        """Call for every chunk to create a primitive stream plot of pressure and pitch to stdout
 
         Pitch is indicated with 'o' bars, amplitude is indicated with '-'
         """
 
-        power = utils.calc_power(data)
-        bars = "-"*int(1000*power/2**16)
+        pressure = utils.calc_mean_pressure(data)
+        bars = "-"*int(1000*pressure/2**16)
 
-        print("%05d %s" % (power, bars))
+        print("%05d %s" % (pressure, bars))
 
         w = np.fft.fft(data)
         freqs = np.fft.fftfreq(len(data))
