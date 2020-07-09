@@ -175,6 +175,7 @@ class Detector(object):
         self.event_finished = False
         self.event_started = False
 
+        self.timer = None
         self.frames = []
 
 
@@ -191,6 +192,11 @@ class Detector(object):
 
         self.update_event_states(power)
 
+        if self.event_started:
+            self.timer = utils.Timer('start')
+        elif self.event_finished:
+            self.timer.make_checkpoint('finish')
+
         # Write to stdout if not self.quiet
         self.print_to_stdout()
 
@@ -204,24 +210,19 @@ class Detector(object):
 
 class Monitor(object):
     def __init__(self, args = argparse.Namespace(), quiet=False):
+
         self.args = args
 
-        self.quiet = quiet
+        A = lambda x: self.args.__dict__.get(x, None)
+        self.quiet = A('quiet') or quiet
+        self.calibration_time = A('calibration_time') or 3 # How many seconds is calibration window
+        self.calibration_threshold = A('calibration_threshold') or 0.50 # Required ratio of std power to mean power
+        self.calibration_tries = A('calibration_tries') or 1 # Number of running windows tried until threshold is doubled
+        self.event_start_threshold = A('event_start_threshold') or 3 # standard deviations above background noise to start an event
+        self.event_end_threshold = A('event_end_threshold') or 2 # standard deviations above background noise to end an event
+        self.seconds = A('seconds') or 0.5 # see Detector docstring
+        self.num_consecutive = A('num_consecutive') or 4 # see Detector docstring
 
-        self.dt = maple.CHUNK/maple.RATE # Time between each sample
-
-        # Calibration parameters
-        self.calibration_time = 3 # How many seconds is calibration window
-        self.calibration_threshold = 0.50 # Required ratio of std power to mean power
-        self.calibration_tries = 1 # Number of running windows tried until threshold is doubled
-
-        # Event detection parameters
-        self.event_start_threshold = 3 # standard deviations above background noise to start an event
-        self.event_end_threshold = 2 # standard deviations above background noise to end an event
-        self.seconds = 0.5
-        self.num_consecutive = 4
-
-        self.timer = None
         self.stream = None
         self.background = None
         self.background_std = None
@@ -230,6 +231,8 @@ class Monitor(object):
         self.detector = None
         self.event_recs = {}
         self.num_events = 0
+
+        self.dt = maple.CHUNK/maple.RATE # Time between each sample
 
 
     def read_chunk(self):
@@ -284,9 +287,12 @@ class Monitor(object):
 
 
     def setup(self):
-        self.timer = utils.Timer()
         self.stream = Stream()
 
+        self.recalibrate()
+
+
+    def recalibrate(self):
         self.calibrate_background_noise()
 
         self.detector = Detector(

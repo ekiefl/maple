@@ -4,14 +4,63 @@ import maple
 import maple.audio as audio
 import maple.events as events
 
+from maple.data import DataBase
 from maple.owner_recordings import OwnerRecordings
 
 import time
+import pandas as pd
+import argparse
 import sounddevice as sd
 
 
+class MonitorDog(events.Monitor):
+    """Monitor your dog"""
+
+    def __init__(self, args = argparse.Namespace()):
+        events.Monitor.__init__(self, args)
+
+        self.db = DataBase(new_database=True)
+        self.cols = maple.db_structure['events']['names']
+        self.events = pd.DataFrame({}, columns=self.cols)
+
+        self.buffer_size = 0
+        self.max_buffer_size = 1
+
+
+    def store_buffer(self):
+        self.db.insert_rows_from_dataframe('events', self.events)
+        self.events = pd.DataFrame({}, columns=self.cols)
+        self.buffer_size = 0
+
+
+    def add_event(self, data):
+        """Add event to self.events, taking the event audio (numpy array) as input"""
+
+        event = {
+            't_start': self.detector.timer.checkpoints['start'],
+            't_end': self.detector.timer.checkpoints['finish'],
+            't_len': self.detector.timer.time_between_checkpoints('finish', 'start'),
+        }
+
+        self.events = self.events.append(event, ignore_index=True)
+
+        self.buffer_size += 1
+        if self.buffer_size == self.max_buffer_size:
+            self.store_buffer()
+
+
+    def run(self):
+        self.setup()
+
+        while True:
+            self.add_event(self.wait_for_event())
+
+
+
+
+
 class RecordOwnerVoice(events.Monitor):
-    """Initiate this class to record and store audio clips to yell at your dog"""
+    """Record and store audio clips to yell at your dog"""
 
     def __init__(self):
         events.Monitor.__init__(self, quiet=True)

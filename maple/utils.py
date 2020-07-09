@@ -34,6 +34,13 @@ class Timer:
         return timedelta
 
 
+    def time_between_checkpoints(self, key2, key1, as_timedelta=False):
+        """Find time difference between two checkpoints in seconds"""
+
+        time_diff = self.timedelta_to_checkpoint(self.checkpoints[key2], key1)
+        return time_diff if as_timedelta else time_diff.total_seconds()
+
+
     def make_checkpoint(self, checkpoint_key = None, increment_to = None):
         if not checkpoint_key:
             checkpoint_key = self.num_checkpoints + 1
