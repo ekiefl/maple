@@ -14,6 +14,7 @@ from pathlib import Path
 from scipy.io.wavfile import read as wav_read
 from scipy.io.wavfile import write as wav_write
 
+
 class Stream(object):
     def __init__(self):
         self.p = pyaudio.PyAudio()
@@ -49,7 +50,7 @@ class Stream(object):
 
 
 class Detector(object):
-    def __init__(self, background_std, background, start_thresh, end_thresh, num_consecutive, seconds, dt, quiet=False):
+    def __init__(self, background_std, background, start_thresh, end_thresh, num_consecutive, seconds, dt, hang_time, quiet=True):
         """Manages the detection of events
 
         Parameters
@@ -80,6 +81,9 @@ class Detector(object):
         dt : float
             The inverse sampling frequency, i.e the time captured by each frame.
 
+        hang_time : float
+            If an event lasts this long, the flag self.hang is set to True
+
         quiet : bool
             If True, nothing is sent to stdout
         """
@@ -96,11 +100,16 @@ class Detector(object):
         self.start_thresh = self.bg_mean + start_thresh*self.bg_std
         self.end_thresh = self.bg_mean + end_thresh*self.bg_std
 
+        self.hang_time = hang_time
+
         self.reset()
 
 
     def update_event_states(self, pressure):
         """Update event states based on their current states plus the pressure of the current frame"""
+
+        if self.in_event and self.timer.elapsed_time() > self.hang_time:
+            self.hang = True
 
         if self.event_started:
             self.event_started = False
@@ -174,6 +183,7 @@ class Detector(object):
         self.in_on_transition = False
         self.event_finished = False
         self.event_started = False
+        self.hang = False
 
         self.timer = None
         self.frames = []
@@ -222,6 +232,7 @@ class Monitor(object):
         self.event_end_threshold = A('event_end_threshold') or 2 # standard deviations above background noise to end an event
         self.seconds = A('seconds') or 0.25 # see Detector docstring
         self.num_consecutive = A('num_consecutive') or 4 # see Detector docstring
+        self.hang_time = A('num_consecutive') or 30 # see Detector docstring
 
         self.stream = None
         self.background = None
@@ -295,6 +306,7 @@ class Monitor(object):
     def recalibrate(self):
         self.calibrate_background_noise()
 
+
         self.detector = Detector(
             background_std = self.background_std,
             background = self.background,
@@ -302,12 +314,13 @@ class Monitor(object):
             end_thresh = self.event_end_threshold,
             seconds = self.seconds,
             num_consecutive = self.num_consecutive,
+            hang_time = self.hang_time,
             dt = self.dt,
             quiet = self.quiet,
         )
 
 
-    def wait_for_event(self, log=True):
+    def wait_for_event(self):
         """Waits for an event, records the event, and returns the event audio as numpy array"""
 
         self.detector.reset()
@@ -318,6 +331,11 @@ class Monitor(object):
 
                 if self.detector.event_finished:
                     break
+
+                if self.detector.hang:
+                    print('Event hang... Recalibrating')
+                    self.recalibrate()
+                    return self.wait_for_event()
 
         return self.detector.get_event_data()
 

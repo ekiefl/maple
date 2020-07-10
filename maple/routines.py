@@ -14,10 +14,11 @@ import pandas as pd
 import argparse
 import sounddevice as sd
 
+
 class MonitorDog(events.Monitor):
     """Monitor your dog"""
 
-    def __init__(self, args = argparse.Namespace(quiet=True)):
+    def __init__(self, args = argparse.Namespace(quiet=False)):
         events.Monitor.__init__(self, args)
 
         self.db = DataBase(new_database=True)

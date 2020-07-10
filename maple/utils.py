@@ -53,6 +53,10 @@ class Timer:
         return datetime.datetime.fromtimestamp(time.time())
 
 
+    def elapsed_time(self):
+        return self.timedelta_to_checkpoint(self.timestamp()).total_seconds()
+
+
     def timedelta_to_checkpoint(self, timestamp, checkpoint_key=None):
         if not checkpoint_key: checkpoint_key = self.initial_checkpoint_key
         timedelta = timestamp - self.checkpoints[checkpoint_key]
