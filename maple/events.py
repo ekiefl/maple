@@ -226,13 +226,13 @@ class Monitor(object):
         A = lambda x: self.args.__dict__.get(x, None)
         self.quiet = A('quiet') or quiet
         self.calibration_time = A('calibration_time') or 3 # How many seconds is calibration window
-        self.calibration_threshold = A('calibration_threshold') or 0.1 # Required ratio of std pressure to mean pressure
+        self.calibration_threshold = A('calibration_threshold') or 0.3 # Required ratio of std pressure to mean pressure
         self.calibration_tries = A('calibration_tries') or 4 # Number of running windows tried until threshold is doubled
         self.event_start_threshold = A('event_start_threshold') or 3 # standard deviations above background noise to start an event
         self.event_end_threshold = A('event_end_threshold') or 2 # standard deviations above background noise to end an event
         self.seconds = A('seconds') or 0.25 # see Detector docstring
         self.num_consecutive = A('num_consecutive') or 4 # see Detector docstring
-        self.hang_time = A('num_consecutive') or 30 # see Detector docstring
+        self.hang_time = A('num_consecutive') or 20 # see Detector docstring
 
         self.stream = None
         self.background = None

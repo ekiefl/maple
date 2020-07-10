@@ -16,16 +16,24 @@ import sounddevice as sd
 
 
 class MonitorDog(events.Monitor):
-    """Monitor your dog"""
+    """Monitor your dog or boyfriend who won't stop singing"""
 
     def __init__(self, args = argparse.Namespace(quiet=False)):
 
         A = lambda x: args.__dict__.get(x, None)
-        self.response_thresh = A('response_thresh') or 3
-        self.response_time = A('response_time') or datetime.timedelta(seconds=10)
-        self.recalibration_rate = A('recalibration_rate') or datetime.timedelta(minutes=5)
-        self.should_respond = A('respond') or True # FIXME will always be True
+        self.response_thresh = A('response_thresh') or 5
+        self.response_time = A('response_time') or 10
+        self.recalibration_rate = A('recalibration_rate') or 5
         self.max_buffer_size = A('max_buffer_size') or 100
+        self.cooldown = A('cooldown') or 5
+
+        self.response_time = datetime.timedelta(seconds=self.response_time)
+        self.recalibration_rate = datetime.timedelta(minutes=self.recalibration_rate)
+        self.cooldown = datetime.timedelta(minutes=self.cooldown)
+
+        self.should_respond = A('respond')
+        if self.should_respond is None:
+            self.should_respond = True
 
         events.Monitor.__init__(self, args)
 
@@ -38,7 +46,7 @@ class MonitorDog(events.Monitor):
 
         if self.should_respond:
             self.owner_event_cols = maple.db_structure['owner_events']['names']
-            self.owner_events = pd.DataFrame({}, columns=self.event_cols)
+            self.owner_events = pd.DataFrame({}, columns=self.owner_event_cols)
 
             self.owner = OwnerRecordings()
             self.owner.load()
@@ -113,12 +121,15 @@ class MonitorDog(events.Monitor):
 
                 if self.buffer_size == self.max_buffer_size:
                     self.store_buffer()
+
         except KeyboardInterrupt:
             self.store_buffer()
 
 
     def intervene(self):
         timestamp = self.timer.timestamp()
+        if self.timer.timedelta_to_checkpoint(timestamp, self.timer.last) < self.cooldown:
+            return False
 
         # Get a df of events that had end times within the window
         events_in_window = self.events[(timestamp - self.events['t_end']) < self.response_time]
@@ -128,6 +139,7 @@ class MonitorDog(events.Monitor):
             return False
 
         pressure_excess = self.get_excess_pressure_ratio_over_window(events_in_window, timestamp)
+        print(pressure_excess)
         if pressure_excess > self.response_thresh:
             return True
 
@@ -138,6 +150,7 @@ class MonitorDog(events.Monitor):
         # FIXME pick name based on reason
         name = self.owner.play_random(blocking=True)
         self.add_owner_event(name, reason)
+        self.timer.make_checkpoint()
 
 
     def get_excess_pressure_ratio_over_window(self, events, timestamp):
