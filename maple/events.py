@@ -270,8 +270,8 @@ class Monitor(object):
                 if np.std(pressure_vals)/np.mean(pressure_vals) < self.calibration_threshold:
                     self.background = np.mean(pressure_vals)
                     self.background_std = np.std(pressure_vals)
-
                     self.background_audio = np.concatenate(audio)
+                    print('Calibrated.')
                     return
 
                 # Threshold not met, try again

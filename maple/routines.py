@@ -17,7 +17,7 @@ import sounddevice as sd
 class MonitorDog(events.Monitor):
     """Monitor your dog"""
 
-    def __init__(self, args = argparse.Namespace()):
+    def __init__(self, args = argparse.Namespace(quiet=True)):
         events.Monitor.__init__(self, args)
 
         self.db = DataBase(new_database=True)
@@ -27,13 +27,13 @@ class MonitorDog(events.Monitor):
         self.buffer_size = 0
         self.max_buffer_size = 100
 
-        self.timer = utils.Timer()
-
         self.response_thresh = 3
         self.response_time = datetime.timedelta(seconds=10)
 
         self.owner = OwnerRecordings()
         self.owner.load()
+
+        self.timer = None
 
 
     def store_buffer(self):
@@ -69,6 +69,7 @@ class MonitorDog(events.Monitor):
 
     def run(self):
         self.setup()
+        self.timer = utils.Timer()
 
         while True:
             self.add_event(self.wait_for_event())
@@ -78,17 +79,47 @@ class MonitorDog(events.Monitor):
 
 
     def intervene(self):
-        events_in_window = self.events[self.timer.timestamp()-self.events['t_start'] < self.response_time]
+        timestamp = self.timer.timestamp()
 
-        if events_in_window.shape[0] >= self.response_thresh:
+        # Get a df of events that had end times within the window
+        events_in_window = self.events[(timestamp - self.events['t_end']) < self.response_time]
+
+        if events_in_window.empty:
+            # No events, no intervene
+            return False
+
+        pressure_excess = self.get_excess_pressure_ratio_over_window(events_in_window, timestamp)
+        print(pressure_excess)
+        if pressure_excess > self.response_thresh:
             return True
+
+        return False
 
 
     def respond(self):
-        self.owner.play_random()
+        self.owner.play_random(blocking=True)
 
 
+    def get_excess_pressure_ratio_over_window(self, events, timestamp):
+        """Calculate pressure over window range compared to that expected by background"""
 
+        time_since_start = self.timer.timedelta_to_checkpoint(timestamp)
+        window_size = time_since_start if time_since_start < self.response_time else self.response_time
+
+        pressure = events['pressure_sum'].sum()
+        time_in_event = events['t_len'].sum()
+
+        earliest_event = events.iloc[-1]
+        if earliest_event['t_start'] < (timestamp - window_size):
+            # last event started outside time window. correct pressure and time_in_event
+            time_out_window = ((timestamp - window_size) - earliest_event['t_start']).total_seconds()
+            frac_out_window = time_out_window / earliest_event['t_len']
+            pressure -= earliest_event['pressure_sum'] * frac_out_window
+            time_in_event -= time_out_window
+
+        pressure += self.background * (window_size.total_seconds() - time_in_event) * maple.RATE
+        bg_pressure = self.background * window_size.total_seconds() * maple.RATE
+        return pressure/bg_pressure
 
 
 class RecordOwnerVoice(events.Monitor):

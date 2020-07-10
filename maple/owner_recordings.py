@@ -51,11 +51,11 @@ class OwnerRecordings(object):
             self.arrays[rec.stem] = data
 
 
-    def play(self, name):
-        sd.play(self.arrays[name])
+    def play(self, name, blocking=False):
+        sd.play(self.arrays[name], blocking=blocking)
 
 
-    def play_random(self):
-        self.play(np.random.choice(self.names))
+    def play_random(self, blocking=False):
+        self.play(np.random.choice(self.names), blocking=blocking)
 
 
