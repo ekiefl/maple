@@ -1,0 +1,10 @@
+name	sentiment
+SH	bad
+ah_stop_it_no	bad
+mayyyyppllleee_noooooo	bad
+nooooooooooooooowa	bad
+ah_ah	bad
+maple_no	bad
+no_ah_ah_no	bad
+sh_sh_sh_sh_sh	bad
+would_you_stop_it	bad

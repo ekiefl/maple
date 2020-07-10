@@ -32,6 +32,7 @@ class DataBase(object):
         if new_database:
             self.create_self()
             self.create_table('events', maple.db_structure['events']['names'], maple.db_structure['events']['types'])
+            self.create_table('owner_events', maple.db_structure['owner_events']['names'], maple.db_structure['owner_events']['types'])
 
 
     def get_default_db_id(self):

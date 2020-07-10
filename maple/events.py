@@ -226,8 +226,8 @@ class Monitor(object):
         A = lambda x: self.args.__dict__.get(x, None)
         self.quiet = A('quiet') or quiet
         self.calibration_time = A('calibration_time') or 3 # How many seconds is calibration window
-        self.calibration_threshold = A('calibration_threshold') or 0.50 # Required ratio of std pressure to mean pressure
-        self.calibration_tries = A('calibration_tries') or 1 # Number of running windows tried until threshold is doubled
+        self.calibration_threshold = A('calibration_threshold') or 0.1 # Required ratio of std pressure to mean pressure
+        self.calibration_tries = A('calibration_tries') or 4 # Number of running windows tried until threshold is doubled
         self.event_start_threshold = A('event_start_threshold') or 3 # standard deviations above background noise to start an event
         self.event_end_threshold = A('event_end_threshold') or 2 # standard deviations above background noise to end an event
         self.seconds = A('seconds') or 0.25 # see Detector docstring
@@ -261,12 +261,13 @@ class Monitor(object):
         increased and the process is repeated.
         """
 
-        stable = False
         pressure_vals = []
         audio = []
 
         # Number of chunks in running window based on self.calibration_time
         running_avg_domain = int(self.calibration_time / self.dt)
+
+        calibration_thresh = self.calibration_threshold
 
         with self.stream:
             tries = 0
@@ -278,7 +279,7 @@ class Monitor(object):
 
                 # Test if threshold met
                 pressure_vals = np.array(pressure_vals)
-                if np.std(pressure_vals)/np.mean(pressure_vals) < self.calibration_threshold:
+                if np.std(pressure_vals)/np.mean(pressure_vals) < calibration_thresh:
                     self.background = np.mean(pressure_vals)
                     self.background_std = np.std(pressure_vals)
                     self.background_audio = np.concatenate(audio)
@@ -291,21 +292,19 @@ class Monitor(object):
                 tries += 1
 
                 if tries == self.calibration_tries:
-                    # Max tries met--doubling calibration threshold
-                    print(f'Calibration threshold not met after {tries} tries. Increasing threshold ({self.calibration_threshold:.2f} --> {1.5*self.calibration_threshold:.2f})')
+                    # Max tries met--increase calibration threshold
+                    print(f'Calibration threshold not met after {tries} tries. Increasing threshold ({calibration_thresh:.2f} --> {0.1 + calibration_thresh:.2f})')
                     tries = 0
-                    self.calibration_threshold *= 1.5
+                    calibration_thresh += 0.1
 
 
     def setup(self):
         self.stream = Stream()
-
         self.recalibrate()
 
 
     def recalibrate(self):
         self.calibrate_background_noise()
-
 
         self.detector = Detector(
             background_std = self.background_std,

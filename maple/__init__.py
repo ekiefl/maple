@@ -19,7 +19,11 @@ db_structure = {
         'types': ['text'],
     },
     'events': {
-        'names': ['t_start', 't_end', 't_len', 'energy', 'power', 'pressure_mean', 'pressure_sum', 'class', 'audio'],
-        'types': ['text', 'text', 'numeric', 'numeric', 'numeric', 'numeric', 'numeric', 'text', 'blob'],
+        'names': ['event_id', 't_start', 't_end', 't_len', 'energy', 'power', 'pressure_mean', 'pressure_sum', 'class', 'audio'],
+        'types': ['integer', 'text', 'text', 'numeric', 'numeric', 'numeric', 'numeric', 'numeric', 'text', 'blob'],
+    },
+    'owner_events': {
+        'names': ['t_start', 'response_to', 'name', 'reason', 'sentiment'],
+        'types': ['text', 'integer', 'text', 'text', 'text'],
     },
 }

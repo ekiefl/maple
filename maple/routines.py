@@ -19,27 +19,42 @@ class MonitorDog(events.Monitor):
     """Monitor your dog"""
 
     def __init__(self, args = argparse.Namespace(quiet=False)):
+
+        A = lambda x: args.__dict__.get(x, None)
+        self.response_thresh = A('response_thresh') or 3
+        self.response_time = A('response_time') or datetime.timedelta(seconds=10)
+        self.recalibration_rate = A('recalibration_rate') or datetime.timedelta(minutes=5)
+        self.should_respond = A('respond') or True # FIXME will always be True
+        self.max_buffer_size = A('max_buffer_size') or 100
+
         events.Monitor.__init__(self, args)
 
         self.db = DataBase(new_database=True)
-        self.cols = maple.db_structure['events']['names']
-        self.events = pd.DataFrame({}, columns=self.cols)
+        self.event_cols = maple.db_structure['events']['names']
+        self.events = pd.DataFrame({}, columns=self.event_cols)
 
         self.buffer_size = 0
-        self.max_buffer_size = 100
+        self.event_id = 0
 
-        self.response_thresh = 3
-        self.response_time = datetime.timedelta(seconds=10)
+        if self.should_respond:
+            self.owner_event_cols = maple.db_structure['owner_events']['names']
+            self.owner_events = pd.DataFrame({}, columns=self.event_cols)
 
-        self.owner = OwnerRecordings()
-        self.owner.load()
+            self.owner = OwnerRecordings()
+            self.owner.load()
 
         self.timer = None
 
 
     def store_buffer(self):
         self.db.insert_rows_from_dataframe('events', self.events)
-        self.events = pd.DataFrame({}, columns=self.cols)
+        self.events = pd.DataFrame({}, columns=self.event_cols)
+
+        if self.should_respond:
+            # Also store any owner responses
+            self.db.insert_rows_from_dataframe('owner_events', self.owner_events)
+            self.owner_events = pd.DataFrame({}, columns=self.owner_event_cols)
+
         self.buffer_size = 0
 
 
@@ -50,6 +65,7 @@ class MonitorDog(events.Monitor):
         t_in_sec = self.detector.timer.time_between_checkpoints('finish', 'start')
 
         event = {
+            'event_id': self.event_id,
             't_start': self.detector.timer.checkpoints['start'],
             't_end': self.detector.timer.checkpoints['finish'],
             't_len': t_in_sec,
@@ -62,21 +78,43 @@ class MonitorDog(events.Monitor):
         }
 
         self.events = self.events.append(event, ignore_index=True)
-
         self.buffer_size += 1
-        if self.buffer_size == self.max_buffer_size:
-            self.store_buffer()
+        self.event_id += 1
+
+
+    def add_owner_event(self, name, reason=None):
+        event = {
+            't_start': self.detector.timer.checkpoints['finish'], # starts when event finishes
+            'name': name,
+            'response_to': self.events['event_id'].iloc[-1] if reason == 'too_loud' else -1,
+            'reason': reason,
+            'sentiment': self.owner.sentiment.get(name),
+        }
+
+        self.owner_events = self.owner_events.append(event, ignore_index=True)
 
 
     def run(self):
         self.setup()
         self.timer = utils.Timer()
+        self.calib = utils.Timer()
 
-        while True:
-            self.add_event(self.wait_for_event())
+        try:
+            while True:
+                self.add_event(self.wait_for_event())
 
-            if self.intervene():
-                self.respond()
+                if self.should_respond and self.intervene():
+                    self.respond(reason='too_loud')
+
+                if self.calib.timedelta_to_checkpoint(checkpoint_key=self.calib.last) > self.recalibration_rate:
+                    print('Overdue for calibration. Calibrating...')
+                    self.recalibrate()
+                    self.calib.make_checkpoint()
+
+                if self.buffer_size == self.max_buffer_size:
+                    self.store_buffer()
+        except KeyboardInterrupt:
+            self.store_buffer()
 
 
     def intervene(self):
@@ -90,15 +128,16 @@ class MonitorDog(events.Monitor):
             return False
 
         pressure_excess = self.get_excess_pressure_ratio_over_window(events_in_window, timestamp)
-        print(pressure_excess)
         if pressure_excess > self.response_thresh:
             return True
 
         return False
 
 
-    def respond(self):
-        self.owner.play_random(blocking=True)
+    def respond(self, reason=None):
+        # FIXME pick name based on reason
+        name = self.owner.play_random(blocking=True)
+        self.add_owner_event(name, reason)
 
 
     def get_excess_pressure_ratio_over_window(self, events, timestamp):
@@ -141,6 +180,10 @@ class RecordOwnerVoice(events.Monitor):
             'name': {
                 'msg': 'Great! type a name for your audio file (just a name, no extension). Response: ',
                 'function': self.name_handle
+            },
+            'sentiment': {
+                'msg': 'Final question. Choose the sentiment: [g] for good, [b] for bad, [w] for warn. Press [q] to quit. Response: ',
+                'function': self.sentiment_handle
             },
         }
 
@@ -202,9 +245,28 @@ class RecordOwnerVoice(events.Monitor):
         elif response == 'q':
             self.state = 'done'
         else:
-            self.recs.write(response, self.recording)
-            print('Stored voice input...')
-            print(f"You now have {self.num_recordings} recordings.")
-            self.state = 'home'
+            self.name = response
+            self.state = 'sentiment'
+
+
+    def sentiment_handle(self, response):
+        if response == 'w':
+            sentiment = 'warn'
+        elif response == 'g':
+            sentiment = 'good'
+        elif response == 'b':
+            sentiment = 'bad'
+        elif response == 'q':
+            self.state = 'done'
+        else:
+            print('invalid input')
+            return
+
+        self.recs.write(self.name, self.recording, maple.RATE, sentiment)
+        print('Stored voice input...')
+        print(f"You now have {self.recs.num} recordings.")
+        self.state = 'home'
+
+
 
 

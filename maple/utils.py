@@ -44,7 +44,7 @@ class Timer:
     def __init__(self, initial_checkpoint_key=0):
         self.timer_start = self.timestamp()
         self.initial_checkpoint_key = initial_checkpoint_key
-        self.last_checkpoint_key = self.initial_checkpoint_key
+        self.last = self.initial_checkpoint_key
         self.checkpoints = OrderedDict([(initial_checkpoint_key, self.timer_start)])
         self.num_checkpoints = 0
 
@@ -53,11 +53,12 @@ class Timer:
         return datetime.datetime.fromtimestamp(time.time())
 
 
-    def elapsed_time(self):
+    def elapsed_time(self, as_timedelta=False):
         return self.timedelta_to_checkpoint(self.timestamp()).total_seconds()
 
 
-    def timedelta_to_checkpoint(self, timestamp, checkpoint_key=None):
+    def timedelta_to_checkpoint(self, timestamp=None, checkpoint_key=None):
+        if not timestamp: timestamp = self.timestamp()
         if not checkpoint_key: checkpoint_key = self.initial_checkpoint_key
         timedelta = timestamp - self.checkpoints[checkpoint_key]
         return timedelta
@@ -81,7 +82,7 @@ class Timer:
         checkpoint = self.timestamp()
 
         self.checkpoints[checkpoint_key] = checkpoint
-        self.last_checkpoint_key = checkpoint_key
+        self.last = checkpoint_key
 
         self.num_checkpoints += 1
 

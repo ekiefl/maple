@@ -2,6 +2,7 @@
 
 import maple
 import numpy as np
+import pandas as pd
 import sounddevice as sd
 
 from pathlib import Path
@@ -15,14 +16,13 @@ class OwnerRecordings(object):
         self.dir = maple.owner_recordings_dir
         self.dir.mkdir(exist_ok=True)
 
-        self.recs = list(self.dir.glob('*.wav'))
-        self.names = [x.stem for x in self.recs]
-        self.num = len(self.recs)
+        self.load()
+
 
         self.arrays = {}
 
 
-    def write(self, name, data, fs):
+    def write(self, name, data, fs, sentiment=None):
         """Write a numpy array to a .wav file
 
         Parameters
@@ -35,20 +35,39 @@ class OwnerRecordings(object):
 
         fs : int
             sampling freq
+
+        sentiment : str, None
+            label for the owner recording
         """
 
         output = self.dir/(name+'.wav')
         wav_write(output, fs, data)
 
-        self.num += 1
-        self.recs.append(output)
+        if self.summary is not None:
+            new_summary = self.summary.append({'name': name, 'sentiment': sentiment}, ignore_index=True)
+            new_summary.to_csv(self.dir/'summary.txt', sep='\t', index=False)
+        else:
+            pd.DataFrame({'name': [name], 'sentiment': [sentiment]}).to_csv(self.dir/'summary.txt', sep='\t', index=False)
+
         self.load()
 
 
     def load(self):
+        self.recs = list(self.dir.glob('*.wav'))
+        self.num = len(self.recs)
+        self.names = [x.stem for x in self.recs]
+
+        self.arrays = {}
         for rec in self.recs:
             _, data = wav_read(rec)
             self.arrays[rec.stem] = data
+
+        if (self.dir/'summary.txt').exists():
+            self.summary = pd.read_csv(self.dir/'summary.txt', sep='\t')
+            self.sentiment = dict(zip(self.summary['name'], self.summary['sentiment']))
+        else:
+            self.summary = None
+            self.sentiment = None
 
 
     def play(self, name, blocking=False):
@@ -56,6 +75,9 @@ class OwnerRecordings(object):
 
 
     def play_random(self, blocking=False):
-        self.play(np.random.choice(self.names), blocking=blocking)
+        choice = np.random.choice(self.names)
+        self.play(choice, blocking=blocking)
+
+        return choice
 
 
