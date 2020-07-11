@@ -260,6 +260,7 @@ class Monitor(object):
         background. Otherwise, it is tried again. If it fails too many times, the threshold is
         increased and the process is repeated.
         """
+        print('Calibrating.')
 
         pressure_vals = []
         audio = []
@@ -279,14 +280,18 @@ class Monitor(object):
 
                 # Test if threshold met
                 pressure_vals = np.array(pressure_vals)
-                if np.std(pressure_vals)/np.mean(pressure_vals) < calibration_thresh:
-                    self.background = np.mean(pressure_vals)
-                    self.background_std = np.std(pressure_vals)
+                ratio = np.std(pressure_vals)/np.mean(pressure_vals)
+                if ratio < calibration_thresh:
                     self.background_audio = np.concatenate(audio)
+                    self.background = np.mean(pressure_vals) # same as utils.calc_mean_pressure(self.background_audio)
+                    self.background_std = np.std(pressure_vals)
+                    self.background_energy = utils.calc_energy(self.background_audio)
+                    self.background_power = self.background_energy/self.calibration_time
                     print('Calibrated.')
                     return
 
                 # Threshold not met, try again
+                print(f"Failed: Aimed for below {calibration_thresh}, got {ratio:.2f} ... Trying again.")
                 pressure_vals = []
                 audio = []
                 tries += 1

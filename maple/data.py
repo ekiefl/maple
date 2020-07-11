@@ -14,9 +14,12 @@ from pathlib import Path
 
 
 class DataBase(object):
-    def __init__(self, db_path=None, new_database=False):
+    def __init__(self, db_path=None, new_database=False, temp=False):
         if db_path is None:
-            self.db_path = maple.db_dir / self.get_default_db_id() / 'events.db'
+            if temp:
+                self.db_path = maple.db_dir_temp / self.get_default_db_id() / 'events.db'
+            else:
+                self.db_path = maple.db_dir / self.get_default_db_id() / 'events.db'
         else:
             self.db_path = Path(db_path)
 
@@ -41,7 +44,14 @@ class DataBase(object):
 
     def get_default_db_id(self):
         dt = datetime.datetime.now()
-        return '_'.join([str(x) for x in [dt.date().year, dt.date().month, dt.date().day, dt.time().hour, dt.time().minute, dt.time().second]])
+        return '_'.join([f"{x:02d}" for x in [
+            dt.date().year,
+            dt.date().month,
+            dt.date().day,
+            dt.time().hour,
+            dt.time().minute,
+            dt.time().second,
+        ]])
 
 
     def get_table_as_dataframe(self, table_name, columns_of_interest=None):
@@ -109,12 +119,17 @@ class DataBase(object):
 
 
 class DBAnalysis:
-    def __init__(self, name=None, path=None):
+    def __init__(self, name=None, path=None, temp=False):
         if (path and name) or not (path or name):
             raise ValueError("choose one of --path or --name")
 
-        if path: self.db_path = path
-        else: self.db_path = maple.db_dir / name / 'events.db'
+        if path:
+            self.db_path = path
+        else:
+            if temp:
+                self.db_path = maple.db_dir_temp / name / 'events.db'
+            else:
+                self.db_path = maple.db_dir / name / 'events.db'
 
         self.db = DataBase(db_path=self.db_path)
 

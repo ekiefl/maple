@@ -27,8 +27,9 @@ class MonitorDog(events.Monitor):
         self.response_time = A('response_time') or 10
         self.recalibration_rate = A('recalibration_rate') or 5
         self.max_buffer_size = A('max_buffer_size') or 100
-        self.cooldown = A('cooldown') or 5
-        self.should_respond = not A('not_respond')
+        self.cooldown = A('cooldown') or 3
+        self.should_respond = not A('no_respond')
+        self.temp = A('temp')
 
         self.response_time = datetime.timedelta(seconds=self.response_time)
         self.recalibration_rate = datetime.timedelta(minutes=self.recalibration_rate)
@@ -36,7 +37,7 @@ class MonitorDog(events.Monitor):
 
         events.Monitor.__init__(self, args)
 
-        self.db = DataBase(new_database=True)
+        self.db = DataBase(new_database=True, temp=self.temp)
         self.event_cols = maple.db_structure['events']['names']
         self.events = pd.DataFrame({}, columns=self.event_cols)
 
@@ -68,10 +69,10 @@ class MonitorDog(events.Monitor):
     def add_event(self, data):
         """Add event to self.events, taking the event audio (numpy array) as input"""
 
-        energy = utils.calc_energy(data/(self.background*maple.RATE**2))
-        pressure = utils.calc_mean_pressure(data)/self.background
-
         t_in_sec = self.detector.timer.time_between_checkpoints('finish', 'start')
+
+        energy = utils.calc_energy(data) / (self.background_energy*t_in_sec/self.calibration_time)
+        pressure = utils.calc_mean_pressure(data)/self.background
 
         event = {
             'event_id': self.event_id,
@@ -129,7 +130,8 @@ class MonitorDog(events.Monitor):
 
     def intervene(self):
         timestamp = self.timer.timestamp()
-        if self.timer.timedelta_to_checkpoint(timestamp, self.timer.last) < self.cooldown:
+
+        if self.timer.last != self.timer.initial_checkpoint_key and self.timer.timedelta_to_checkpoint(timestamp, self.timer.last) < self.cooldown:
             return False
 
         # Get a df of events that had end times within the window
@@ -140,7 +142,6 @@ class MonitorDog(events.Monitor):
             return False
 
         pressure_excess = self.get_excess_pressure_ratio_over_window(events_in_window, timestamp)
-        print(pressure_excess)
         if pressure_excess > self.response_thresh:
             return True
 
@@ -181,8 +182,9 @@ class Analysis(object):
         A = lambda x: args.__dict__.get(x, None)
         self.name = A('session')
         self.path = A('path')
+        self.temp = A('temp')
 
-        self.an = data.DBAnalysis(self.name, self.path)
+        self.an = data.DBAnalysis(self.name, self.path, temp=self.temp)
         self.an.trim()
         self.an.calc_PSDs()
 

@@ -8,6 +8,7 @@ import argparse
 if __name__ == '__main__':
     ap = argparse.ArgumentParser()
     ap.add_argument('mode', choices=('run', 'record', 'analyze'), help="What mode do you want to run in?")
+    ap.add_argument('-t', '--temp', action='store_true', help='Use to search for and save DB sessions in data/temp')
 
     RUN = ap.add_argument_group('run', 'arguments for `run` mode')
     RUN.add_argument('-n', '--no-respond', action='store_true')

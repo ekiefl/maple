@@ -12,6 +12,7 @@ sd.default.samplerate = RATE
 
 owner_recordings_dir = Path(__file__).parent.parent / 'data' / 'owner_recordings'
 db_dir = Path(__file__).parent.parent / 'data' / 'sessions'
+db_dir_temp = Path(__file__).parent.parent / 'data' / 'temp'
 
 db_structure = {
     'self': {
