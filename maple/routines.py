@@ -33,7 +33,7 @@ class MonitorDog(events.Monitor):
 
         self.should_respond = A('respond')
         if self.should_respond is None:
-            self.should_respond = True
+            self.should_respond = False
 
         events.Monitor.__init__(self, args)
 
@@ -71,6 +71,7 @@ class MonitorDog(events.Monitor):
 
         energy = utils.calc_energy(data)
         t_in_sec = self.detector.timer.time_between_checkpoints('finish', 'start')
+        pressure_ratio = utils.calc_mean_pressure(data)/self.background
 
         event = {
             'event_id': self.event_id,
@@ -79,8 +80,8 @@ class MonitorDog(events.Monitor):
             't_len': t_in_sec,
             'energy': energy,
             'power': energy/t_in_sec,
-            'pressure_mean': utils.calc_mean_pressure(data),
-            'pressure_sum': utils.calc_total_pressure(data),
+            'pressure_mean': pressure_ratio,
+            'pressure_sum': pressure_ratio*len(data),
             'class': None, # TODO
             'audio': utils.convert_array_to_blob(data),
         }

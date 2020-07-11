@@ -3,6 +3,7 @@
 import maple
 
 import time
+import gzip
 import numpy as np
 import datetime
 
@@ -30,12 +31,15 @@ def calc_total_pressure(data):
     return np.sum(np.abs(data))
 
 
-def convert_array_to_blob(array, compress=True):
-    return memoryview(array)
+def convert_array_to_blob(array):
+    return gzip.compress(memoryview(array), compresslevel=1)
 
 
-def convert_blob_to_array(blob, dtype=maple.ARRAY_DTYPE, decompress=True):
-    return np.frombuffer(blob, dtype=dtype)
+def convert_blob_to_array(blob, dtype=maple.ARRAY_DTYPE):
+    try:
+        return np.frombuffer(gzip.decompress(blob), dtype=dtype)
+    except:
+        return np.frombuffer(blob, dtype=dtype)
 
 
 class Timer:

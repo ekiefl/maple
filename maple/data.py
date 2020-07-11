@@ -1,10 +1,12 @@
 #! /usr/bin/env python
 
 import maple
+import maple.utils as utils
 
 import pandas as pd
 import sqlite3
 import datetime
+import sounddevice as sd
 
 from pathlib import Path
 
@@ -47,12 +49,6 @@ class DataBase(object):
             columns_of_interest = table_structure
 
         results_df = pd.read_sql('''SELECT * FROM "%s"''' % table_name, self.conn, columns=table_structure)
-
-        if table_name == 'events':
-            # These require special treatment
-            results_df['t_start'] = pd.to_datetime(results_df['t_start'])
-            results_df['t_end'] = pd.to_datetime(results_df['t_end'])
-            results_df['audio'] = results_df['audio'].apply(utils.convert_blob_to_array)
 
         return results_df[columns_of_interest]
 
@@ -108,3 +104,38 @@ class DataBase(object):
     def disconnect(self):
         self.conn.commit()
         self.conn.close()
+
+
+class DBAnalysis:
+    def __init__(self, name):
+        self.db_path = maple.db_dir / (name + '.db')
+        self.db = DataBase(db_path=self.db_path)
+
+        self.get_dog_events()
+        self.get_owner_events()
+
+
+    def get_dog_events(self):
+        self.d = self.db.get_table_as_dataframe('events')
+
+        self.d['t_start'] = pd.to_datetime(self.d['t_start'])
+        self.d['t_end'] = pd.to_datetime(self.d['t_end'])
+        self.d['audio'] = self.d['audio'].apply(utils.convert_blob_to_array)
+        self.d.set_index('event_id', drop=True, inplace=True)
+
+
+    def get_owner_events(self):
+        self.o = self.db.get_table_as_dataframe('owner_events')
+
+
+    def play(self, event_id):
+        sd.play(self.d.loc[event_id, 'audio'], blocking=True)
+
+
+    def play_many(self, df=None):
+        """Play in order of df"""
+        if df is None: df = self.d
+
+        for event_id in df.index:
+            print(f"Playing:\n{df.loc[event_id, [x for x in df.columns if x != 'audio']]}\n")
+            self.play(event_id)
