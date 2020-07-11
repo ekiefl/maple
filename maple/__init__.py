@@ -10,8 +10,8 @@ RATE = 44100
 ARRAY_DTYPE = np.int16
 sd.default.samplerate = RATE
 
-owner_recordings_dir = Path(__file__).parent.parent / 'owner_recordings'
-db_dir = Path(__file__).parent.parent / 'data' / 'dbs'
+owner_recordings_dir = Path(__file__).parent.parent / 'data' / 'owner_recordings'
+db_dir = Path(__file__).parent.parent / 'data' / 'sessions'
 
 db_structure = {
     'self': {

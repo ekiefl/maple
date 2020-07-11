@@ -2,7 +2,9 @@
 
 import maple
 import maple.utils as utils
+import maple.audio as audio
 
+import numpy as np
 import pandas as pd
 import sqlite3
 import datetime
@@ -13,14 +15,14 @@ from pathlib import Path
 
 class DataBase(object):
     def __init__(self, db_path=None, new_database=False):
-        maple.db_dir.mkdir(parents=True, exist_ok=True)
-
         if db_path is None:
-            self.db_path = maple.db_dir / (self.get_default_db_id() + '.db')
+            self.db_path = maple.db_dir / self.get_default_db_id() / 'events.db'
         else:
             self.db_path = Path(db_path)
 
-        self.db_id = self.db_path.stem
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+
+        self.db_id = self.db_path.parent.stem
 
         if new_database and self.db_path.exists():
             raise ValueError(f"db {self.db_path} already exists.")
@@ -107,35 +109,69 @@ class DataBase(object):
 
 
 class DBAnalysis:
-    def __init__(self, name):
-        self.db_path = maple.db_dir / (name + '.db')
+    def __init__(self, name=None, path=None):
+        if (path and name) or not (path or name):
+            raise ValueError("choose one of --path or --name")
+
+        if path: self.db_path = path
+        else: self.db_path = maple.db_dir / name / 'events.db'
+
         self.db = DataBase(db_path=self.db_path)
 
         self.get_dog_events()
         self.get_owner_events()
 
+        self.psds = None
+
+
+    def calc_PSDs(self):
+        self.psds = {
+            'event_id': np.array([], dtype=int),
+            'freq': np.array([]),
+            'psd': np.array([]),
+        }
+
+        for event_id, data in self.dog['audio'].items():
+            f, psd = audio.PSD(data)
+            self.psds['freq'] = np.concatenate((self.psds['freq'], f))
+            self.psds['psd'] = np.concatenate((self.psds['psd'], psd))
+            self.psds['event_id'] = np.concatenate((self.psds['event_id'], event_id * np.ones(len(psd), dtype=int)))
+
 
     def get_dog_events(self):
-        self.d = self.db.get_table_as_dataframe('events')
+        self.dog = self.db.get_table_as_dataframe('events')
 
-        self.d['t_start'] = pd.to_datetime(self.d['t_start'])
-        self.d['t_end'] = pd.to_datetime(self.d['t_end'])
-        self.d['audio'] = self.d['audio'].apply(utils.convert_blob_to_array)
-        self.d.set_index('event_id', drop=True, inplace=True)
+        self.dog['t_start'] = pd.to_datetime(self.dog['t_start'])
+        self.dog['t_end'] = pd.to_datetime(self.dog['t_end'])
+        self.dog['audio'] = self.dog['audio'].apply(utils.convert_blob_to_array)
+        self.dog.set_index('event_id', drop=False, inplace=True)
 
 
     def get_owner_events(self):
-        self.o = self.db.get_table_as_dataframe('owner_events')
+        self.owner = self.db.get_table_as_dataframe('owner_events')
 
 
     def play(self, event_id):
-        sd.play(self.d.loc[event_id, 'audio'], blocking=True)
+        sd.play(self.dog.loc[event_id, 'audio'], blocking=True)
 
 
     def play_many(self, df=None):
         """Play in order of df"""
-        if df is None: df = self.d
+        if df is None: df = self.dog
 
         for event_id in df.index:
             print(f"Playing:\n{df.loc[event_id, [x for x in df.columns if x != 'audio']]}\n")
             self.play(event_id)
+
+
+    def trim(self, left=2, right=2):
+        pass
+        #self.owner = self.owner.loc[
+        #    (self.owner['t_start'] > (self.owner['t_start'].iloc[0] + datetime.timedelta(minutes=left))) & \
+        #    (self.owner['t_start'] < (self.owner['t_start'].iloc[-1] - datetime.timedelta(minutes=right))), :
+        #]
+
+        #self.dog = self.dog.loc[
+        #    (self.dog['t_start'] > (self.dog['t_start'].iloc[0] + datetime.timedelta(minutes=left))) & \
+        #    (self.dog['t_start'] < (self.dog['t_start'].iloc[-1] - datetime.timedelta(minutes=right))), :
+        #]

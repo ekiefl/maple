@@ -1,6 +1,7 @@
 #! /usr/bin/env python
 
 import maple
+import maple.data as data
 import maple.audio as audio
 import maple.utils as utils
 import maple.events as events
@@ -13,6 +14,7 @@ import datetime
 import pandas as pd
 import argparse
 import sounddevice as sd
+import plotly.express as px
 
 
 class MonitorDog(events.Monitor):
@@ -176,7 +178,51 @@ class MonitorDog(events.Monitor):
 
 class Analysis(object):
     def __init__(self, args=argparse.ArgumentParser()):
-        pass
+        A = lambda x: args.__dict__.get(x, None)
+        self.name = A('session')
+        self.path = A('path')
+
+        self.an = data.DBAnalysis(self.name, self.path)
+        self.an.trim()
+        self.an.calc_PSDs()
+
+
+    def run(self):
+        self.histogram()
+        self.psd()
+
+
+    def histogram(self):
+        hover_cols = ['event_id', 't_len', 'energy', 'power', 'pressure_mean', 'pressure_sum']
+
+        fig = px.histogram(
+            self.an.dog,
+            x="t_start",
+            y="pressure_sum",
+            color=None,
+            marginal="rug",
+            hover_data=hover_cols,
+            nbins=100,
+            labels={'t_start': 'Time', 'pressure_sum': 'Pressure'},
+            title='Barking distribution',
+            opacity=0.3,
+        )
+
+        fig.show()
+
+
+    def psd(self):
+        fig = px.line(
+            self.an.psds,
+            x='freq',
+            y='psd',
+            color='event_id',
+            labels={'freq': 'Frequency (Hz)', 'psd': 'PSD'},
+            title='Power Spectrum Densities of each event',
+            log_y=True,
+            log_x=True,
+        )
+        fig.show()
 
 
 class RecordOwnerVoice(events.Monitor):

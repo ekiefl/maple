@@ -13,13 +13,8 @@ if __name__ == '__main__':
     RUN.add_argument('-n', '--no-respond', action='store_true')
 
     ANALYZE = ap.add_argument_group('analyze', 'arguments for `analyze` mode')
-    # FIXME help description lies
-    ANALYZE.add_argument(
-        '-s',
-        '--session',
-        default=None,
-        help='Name of session to analyze. If not set, analysis will be ran for all sessions, as well as a meta-analysis'
-    )
+    ANALYZE.add_argument('-s', '--session', required=None, help='Name of session to analyze')
+    ANALYZE.add_argument('-p', '--path', required=None, help='fullpath of session to analyze')
 
     RECORD = ap.add_argument_group('record', 'arguments for `record` mode')
 
@@ -28,6 +23,6 @@ if __name__ == '__main__':
     if args.mode == 'run':
         routines.MonitorDog(args).run()
     elif args.mode == 'analyze':
-        data.DBAnalysis(args.session)
+        routines.Analysis(args).run()
     elif args.mode == 'record':
         routines.RecordOwnerVoice(args).run()
