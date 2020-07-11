@@ -75,7 +75,7 @@ class Timer:
         return time_diff if as_timedelta else time_diff.total_seconds()
 
 
-    def make_checkpoint(self, checkpoint_key = None, increment_to = None):
+    def make_checkpoint(self, checkpoint_key=None, increment_to=None):
         if not checkpoint_key:
             checkpoint_key = self.num_checkpoints + 1
 
