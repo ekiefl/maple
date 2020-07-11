@@ -26,14 +26,11 @@ class MonitorDog(events.Monitor):
         self.recalibration_rate = A('recalibration_rate') or 5
         self.max_buffer_size = A('max_buffer_size') or 100
         self.cooldown = A('cooldown') or 5
+        self.should_respond = not A('not_respond')
 
         self.response_time = datetime.timedelta(seconds=self.response_time)
         self.recalibration_rate = datetime.timedelta(minutes=self.recalibration_rate)
         self.cooldown = datetime.timedelta(minutes=self.cooldown)
-
-        self.should_respond = A('respond')
-        if self.should_respond is None:
-            self.should_respond = False
 
         events.Monitor.__init__(self, args)
 
@@ -69,9 +66,10 @@ class MonitorDog(events.Monitor):
     def add_event(self, data):
         """Add event to self.events, taking the event audio (numpy array) as input"""
 
-        energy = utils.calc_energy(data)
+        energy = utils.calc_energy(data/(self.background*maple.RATE**2))
+        pressure = utils.calc_mean_pressure(data)/self.background
+
         t_in_sec = self.detector.timer.time_between_checkpoints('finish', 'start')
-        pressure_ratio = utils.calc_mean_pressure(data)/self.background
 
         event = {
             'event_id': self.event_id,
@@ -80,8 +78,8 @@ class MonitorDog(events.Monitor):
             't_len': t_in_sec,
             'energy': energy,
             'power': energy/t_in_sec,
-            'pressure_mean': pressure_ratio,
-            'pressure_sum': pressure_ratio*len(data),
+            'pressure_mean': pressure,
+            'pressure_sum': pressure*t_in_sec,
             'class': None, # TODO
             'audio': utils.convert_array_to_blob(data),
         }
@@ -176,10 +174,15 @@ class MonitorDog(events.Monitor):
         return pressure/bg_pressure
 
 
+class Analysis(object):
+    def __init__(self, args=argparse.ArgumentParser()):
+        pass
+
+
 class RecordOwnerVoice(events.Monitor):
     """Record and store audio clips to yell at your dog"""
 
-    def __init__(self):
+    def __init__(self, args=argparse.ArgumentParser()):
         events.Monitor.__init__(self, quiet=True)
 
         self.menu = {

@@ -19,9 +19,6 @@ class OwnerRecordings(object):
         self.load()
 
 
-        self.arrays = {}
-
-
     def write(self, name, data, fs, sentiment=None):
         """Write a numpy array to a .wav file
 

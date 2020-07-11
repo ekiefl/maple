@@ -20,7 +20,7 @@ class Stream(object):
         self.p = pyaudio.PyAudio()
 
         self._stream = self.p.open(
-            format = pyaudio.paInt32,
+            format = pyaudio.paInt16,
             channels = 1,
             rate = maple.RATE,
             input = True,
