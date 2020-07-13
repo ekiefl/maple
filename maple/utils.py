@@ -64,6 +64,7 @@ class Timer:
     def timedelta_to_checkpoint(self, timestamp=None, checkpoint_key=None):
         if not timestamp: timestamp = self.timestamp()
         if not checkpoint_key: checkpoint_key = self.initial_checkpoint_key
+        if checkpoint_key not in self.checkpoints: return datetime.timedelta(weeks=52)
         timedelta = timestamp - self.checkpoints[checkpoint_key]
         return timedelta
 
@@ -75,19 +76,20 @@ class Timer:
         return time_diff if as_timedelta else time_diff.total_seconds()
 
 
-    def make_checkpoint(self, checkpoint_key=None, increment_to=None):
+    def make_checkpoint(self, checkpoint_key=None, overwrite=False):
         if not checkpoint_key:
             checkpoint_key = self.num_checkpoints + 1
 
         if checkpoint_key in self.checkpoints:
-            raise ValueError('Timer.make_checkpoint :: %s already exists as a checkpoint key. '
-                             'All keys must be unique' % (str(checkpoint_key)))
+            if not overwrite:
+                raise ValueError('Timer.make_checkpoint :: %s already exists as a checkpoint key. '
+                                 'All keys must be unique unless overwrite is set to True' % (str(checkpoint_key)))
+        else:
+            self.num_checkpoints += 1
 
         checkpoint = self.timestamp()
 
         self.checkpoints[checkpoint_key] = checkpoint
         self.last = checkpoint_key
-
-        self.num_checkpoints += 1
 
         return checkpoint

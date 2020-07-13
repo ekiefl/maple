@@ -20,20 +20,15 @@ import plotly.express as px
 class MonitorDog(events.Monitor):
     """Monitor your dog or boyfriend who won't stop singing"""
 
-    def __init__(self, args = argparse.Namespace(quiet=False)):
+    def __init__(self, args = argparse.Namespace(quiet=True)):
 
         A = lambda x: args.__dict__.get(x, None)
-        self.response_thresh = A('response_thresh') or 5
-        self.response_time = A('response_time') or 10
         self.recalibration_rate = A('recalibration_rate') or 10000 # never recalibrate by default
         self.max_buffer_size = A('max_buffer_size') or 100
-        self.cooldown = A('cooldown') or 3
-        self.should_respond = not A('no_respond')
         self.temp = A('temp')
+        self.should_respond = not A('no_respond')
 
-        self.response_time = datetime.timedelta(seconds=self.response_time)
         self.recalibration_rate = datetime.timedelta(minutes=self.recalibration_rate)
-        self.cooldown = datetime.timedelta(minutes=self.cooldown)
 
         events.Monitor.__init__(self, args)
 
@@ -45,11 +40,11 @@ class MonitorDog(events.Monitor):
         self.event_id = 0
 
         if self.should_respond:
+            # This handles all response decision logic
+            self.responder = events.Responder(args)
+
             self.owner_event_cols = maple.db_structure['owner_events']['names']
             self.owner_events = pd.DataFrame({}, columns=self.owner_event_cols)
-
-            self.owner = OwnerRecordings()
-            self.owner.load()
 
         self.timer = None
 
@@ -68,6 +63,8 @@ class MonitorDog(events.Monitor):
 
     def add_event(self, data):
         """Add event to self.events, taking the event audio (numpy array) as input"""
+        if data is None:
+            return None
 
         t_in_sec = self.detector.timer.time_between_checkpoints('finish', 'start')
 
@@ -91,90 +88,37 @@ class MonitorDog(events.Monitor):
         self.buffer_size += 1
         self.event_id += 1
 
+        return event
 
-    def add_owner_event(self, name, reason=None):
-        event = {
-            't_start': self.detector.timer.checkpoints['finish'], # starts when event finishes
-            'name': name,
-            'response_to': self.events['event_id'].iloc[-1] if reason == 'too_loud' else -1,
-            'reason': reason,
-            'sentiment': self.owner.sentiment.get(name),
-        }
 
-        self.owner_events = self.owner_events.append(event, ignore_index=True)
+    def add_owner_event(self, owner_event):
+        self.owner_events = self.owner_events.append(owner_event, ignore_index=True)
 
 
     def run(self):
         self.setup()
         self.timer = utils.Timer()
-        self.calib = utils.Timer()
+        self.timer.make_checkpoint('calibration') # just calibrated
 
         try:
             while True:
-                self.add_event(self.wait_for_event())
+                event = self.add_event(self.wait_for_event(timeout=True))
 
-                if self.should_respond and self.intervene():
-                    self.respond(reason='too_loud')
+                owner_event = self.responder.potentially_respond(event)
+                if owner_event:
+                    self.add_owner_event(owner_event)
 
-                if self.calib.timedelta_to_checkpoint(checkpoint_key=self.calib.last) > self.recalibration_rate:
+                if self.timer.timedelta_to_checkpoint(checkpoint_key='calibration') > self.recalibration_rate:
                     print('Overdue for calibration. Calibrating...')
                     self.recalibrate()
-                    self.calib.make_checkpoint()
+                    self.timer.make_checkpoint('calibration', overwrite=True)
 
                 if self.buffer_size == self.max_buffer_size:
                     self.store_buffer()
 
         except KeyboardInterrupt:
+            # FIXME call Analysis
             self.store_buffer()
-
-
-    def intervene(self):
-        timestamp = self.timer.timestamp()
-
-        if self.timer.last != self.timer.initial_checkpoint_key and self.timer.timedelta_to_checkpoint(timestamp, self.timer.last) < self.cooldown:
-            return False
-
-        # Get a df of events that had end times within the window
-        events_in_window = self.events[(timestamp - self.events['t_end']) < self.response_time]
-
-        if events_in_window.empty:
-            # No events, no intervene
-            return False
-
-        pressure_excess = self.get_excess_pressure_ratio_over_window(events_in_window, timestamp)
-        if pressure_excess > self.response_thresh:
-            return True
-
-        return False
-
-
-    def respond(self, reason=None):
-        # FIXME pick name based on reason
-        name = self.owner.play_random(blocking=True)
-        self.add_owner_event(name, reason)
-        self.timer.make_checkpoint()
-
-
-    def get_excess_pressure_ratio_over_window(self, events, timestamp):
-        """Calculate pressure over window range compared to that expected by background"""
-
-        time_since_start = self.timer.timedelta_to_checkpoint(timestamp)
-        window_size = time_since_start if time_since_start < self.response_time else self.response_time
-
-        pressure = events['pressure_sum'].sum()
-        time_in_event = events['t_len'].sum()
-
-        earliest_event = events.iloc[-1]
-        if earliest_event['t_start'] < (timestamp - window_size):
-            # last event started outside time window. correct pressure and time_in_event
-            time_out_window = ((timestamp - window_size) - earliest_event['t_start']).total_seconds()
-            frac_out_window = time_out_window / earliest_event['t_len']
-            pressure -= earliest_event['pressure_sum'] * frac_out_window
-            time_in_event -= time_out_window
-
-        pressure += self.background * (window_size.total_seconds() - time_in_event) * maple.RATE
-        bg_pressure = self.background * window_size.total_seconds() * maple.RATE
-        return pressure/bg_pressure
 
 
 class Analysis(object):

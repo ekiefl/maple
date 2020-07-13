@@ -4,10 +4,14 @@ import maple
 import maple.utils as utils
 import maple.audio as audio
 
+from maple.owner_recordings import OwnerRecordings
+
 import time
 import numpy as np
+import pandas as pd
 import pyaudio
 import argparse
+import datetime
 import sounddevice as sd
 
 from pathlib import Path
@@ -50,7 +54,7 @@ class Stream(object):
 
 
 class Detector(object):
-    def __init__(self, background_std, background, start_thresh, end_thresh, num_consecutive, seconds, dt, hang_time, quiet=True):
+    def __init__(self, background_std, background, start_thresh, end_thresh, num_consecutive, seconds, dt, hang_time, wait_timeout, quiet=True):
         """Manages the detection of events
 
         Parameters
@@ -82,7 +86,10 @@ class Detector(object):
             The inverse sampling frequency, i.e the time captured by each frame.
 
         hang_time : float
-            If an event lasts this long, the flag self.hang is set to True
+            If an event lasts this long (seconds), the flag self.hang is set to True
+
+        wait_timeout : float
+            If no event occurs in this amount of time (seconds), self.timeout is set to True
 
         quiet : bool
             If True, nothing is sent to stdout
@@ -100,7 +107,8 @@ class Detector(object):
         self.start_thresh = self.bg_mean + start_thresh*self.bg_std
         self.end_thresh = self.bg_mean + end_thresh*self.bg_std
 
-        self.hang_time = hang_time
+        self.hang_time = datetime.timedelta(seconds=hang_time)
+        self.wait_timeout = datetime.timedelta(seconds=wait_timeout)
 
         self.reset()
 
@@ -108,8 +116,12 @@ class Detector(object):
     def update_event_states(self, pressure):
         """Update event states based on their current states plus the pressure of the current frame"""
 
-        if self.in_event and self.timer.elapsed_time() > self.hang_time:
+        if self.in_event and self.timer.timedelta_to_checkpoint(checkpoint_key='start') > self.hang_time:
+            # Event has lasted more than self.hang_time seconds
             self.hang = True
+
+        if not self.in_event and self.timer.timedelta_to_checkpoint(checkpoint_key=0) > self.wait_timeout:
+            self.timeout = True
 
         if self.event_started:
             self.event_started = False
@@ -184,8 +196,9 @@ class Detector(object):
         self.event_finished = False
         self.event_started = False
         self.hang = False
+        self.timeout = False
 
-        self.timer = None
+        self.timer = utils.Timer()
         self.frames = []
 
 
@@ -203,7 +216,7 @@ class Detector(object):
         self.update_event_states(pressure)
 
         if self.event_started:
-            self.timer = utils.Timer('start')
+            self.timer.make_checkpoint('start')
         elif self.event_finished:
             self.timer.make_checkpoint('finish')
 
@@ -219,20 +232,21 @@ class Detector(object):
 
 
 class Monitor(object):
-    def __init__(self, args = argparse.Namespace(), quiet=False):
+    def __init__(self, args = argparse.Namespace()):
 
         self.args = args
 
         A = lambda x: self.args.__dict__.get(x, None)
-        self.quiet = A('quiet') or quiet
+        self.quiet = A('quiet') or False
         self.calibration_time = A('calibration_time') or 3 # How many seconds is calibration window
         self.calibration_threshold = A('calibration_threshold') or 0.3 # Required ratio of std pressure to mean pressure
         self.calibration_tries = A('calibration_tries') or 4 # Number of running windows tried until threshold is doubled
-        self.event_start_threshold = A('event_start_threshold') or 3 # standard deviations above background noise to start an event
-        self.event_end_threshold = A('event_end_threshold') or 3 # standard deviations above background noise to end an event
+        self.event_start_threshold = A('event_start_threshold') or 4 # standard deviations above background noise to start an event
+        self.event_end_threshold = A('event_end_threshold') or 4 # standard deviations above background noise to end an event
         self.seconds = A('seconds') or 0.25 # see Detector docstring
         self.num_consecutive = A('num_consecutive') or 4 # see Detector docstring
-        self.hang_time = A('num_consecutive') or 20 # see Detector docstring
+        self.hang_time = A('hang_time') or 20 # see Detector docstring
+        self.wait_timeout = A('wait_timeout') or 10 # see Detector docstring
 
         self.stream = None
         self.background = None
@@ -319,13 +333,23 @@ class Monitor(object):
             seconds = self.seconds,
             num_consecutive = self.num_consecutive,
             hang_time = self.hang_time,
+            wait_timeout = self.wait_timeout,
             dt = self.dt,
             quiet = self.quiet,
         )
 
 
-    def wait_for_event(self):
-        """Waits for an event, records the event, and returns the event audio as numpy array"""
+    def wait_for_event(self, timeout=False):
+        """Waits for an event
+
+        Records the event, and returns the event audio as numpy array.
+
+        Parameters
+        ==========
+        timeout : bool, False
+            If True, returns None after self.detector.wait_timeout seconds passes without detecting
+            the start of an event.
+        """
 
         self.detector.reset()
 
@@ -340,6 +364,9 @@ class Monitor(object):
                     print('Event hang... Recalibrating')
                     self.recalibrate()
                     return self.wait_for_event()
+
+                if timeout and self.detector.timeout:
+                    return None
 
         return self.detector.get_event_data()
 
@@ -361,5 +388,154 @@ class Monitor(object):
         bars="o"*int(3000*peak/2**16)
 
         print("%05d %s" % (peak, bars))
+
+
+class Responder(object):
+    def __init__(self, args = argparse.Namespace(quiet=False)):
+        A = lambda x: args.__dict__.get(x, None)
+
+        self.praise_max_events = A('praise_max_events') or 10
+        self.praise_max_pressure_sum = A('praise_max_pressure_sum') or 0.01
+        self.praise_response_window = A('praise_response_window') or 2
+        self.praise_cooldown = A('praise_cooldown') or 2
+
+        self.scold_threshold = A('scold_threshold') or 0.7
+        self.scold_trigger = A('scold_trigger') or 0.03
+        self.scold_response_window = A('scold_response_window') or 0.5
+        self.scold_cooldown = A('scold_cooldown') or 5
+
+        # FIXME not implemented
+        self.warn_response_window = A('warn_response_window') or 0.25
+        self.warn_cooldown = A('warn_cooldown') or 1
+
+        self.should_respond = not A('no_respond')
+
+        # Typing
+        self.response_window = datetime.timedelta(minutes=max([
+            self.warn_response_window,
+            self.scold_response_window,
+            self.praise_response_window
+        ]))
+
+        self.warn_response_window = datetime.timedelta(minutes=self.warn_response_window)
+        self.scold_response_window = datetime.timedelta(minutes=self.scold_response_window)
+        self.praise_response_window = datetime.timedelta(minutes=self.praise_response_window)
+        self.warn_cooldown = datetime.timedelta(minutes=self.warn_cooldown)
+        self.scold_cooldown = datetime.timedelta(minutes=self.scold_cooldown)
+        self.praise_cooldown = datetime.timedelta(minutes=self.praise_cooldown)
+
+        self.owner = OwnerRecordings()
+        self.owner.load()
+
+        self.events_in_window = pd.DataFrame({}, columns=maple.db_structure['events']['names'])
+        self.timer = utils.Timer()
+        self.timer.make_checkpoint('good') # start a cooldown for praise
+
+
+    def update_window(self, event=None):
+        """Add an event to the data window and remove events outside the response window time
+
+        Parameters
+        ==========
+        event : dict, None
+            A dictionary with keys equal to maple.db_structure['events']['names']
+        """
+
+        if event is not None:
+            self.add_event(event)
+
+        self.events_in_window = self.events_in_window[(self.timer.timestamp() - self.events_in_window['t_end']) < self.response_window]
+
+
+    def add_event(self, event):
+        self.events_in_window = self.events_in_window.append(event, ignore_index=True)
+
+
+    def respond(self, sentiment, reason):
+        """Play owner recording and return an event dictionary"""
+        name = self.owner.play_random(blocking=True, sentiment=sentiment)
+        self.timer.make_checkpoint(sentiment, overwrite=True)
+
+        response_to = self.events_in_window['event_id'].iloc[-1] if sentiment == 'bad' else -1
+
+        owner_event = {
+            't_start': self.timer.checkpoints[sentiment],
+            'name': name,
+            'response_to': response_to,
+            'reason': reason,
+            'sentiment': sentiment,
+        }
+
+        return owner_event
+
+
+    def potentially_respond(self, event):
+        if not self.should_respond:
+            return
+
+        self.update_window(event)
+        timestamp = self.timer.timestamp()
+
+        should_scold, scold_reason = self.should_scold(timestamp)
+        should_praise, praise_reason = self.should_praise(timestamp)
+
+        if should_scold:
+            owner_event = self.respond(sentiment='bad', reason=scold_reason)
+        elif should_praise:
+            owner_event = self.respond(sentiment='good', reason=praise_reason)
+        else:
+            owner_event = None
+
+        return owner_event
+
+
+    def should_praise(self, timestamp):
+        """Return whether dog should be praised, and the reason"""
+
+        print(f"SHOULD_PRAISE")
+        print(f"=============")
+        print(f"{self.timer.timedelta_to_checkpoint(timestamp, 'good')} vs {self.praise_cooldown}")
+
+        if self.timer.timedelta_to_checkpoint(timestamp, 'good') < self.praise_cooldown:
+            # In praise cooldown
+            return False, None
+
+        praise_window = self.events_in_window[(timestamp - self.events_in_window['t_end']) < self.praise_response_window]
+
+        if praise_window.empty:
+            return True, 'quiet'
+
+        print(f"num_events: {praise_window.shape[0]} <= {self.praise_max_events}? {praise_window.shape[0] <= self.praise_max_events}")
+        print(f"max_pressure_sum: {praise_window['pressure_sum'].max()} <= {self.praise_max_pressure_sum}? {praise_window['pressure_sum'].max() <= self.praise_max_pressure_sum}")
+
+        if praise_window.shape[0] <= self.praise_max_events and praise_window['pressure_sum'].max() <= self.praise_max_pressure_sum:
+            return True, 'quiet'
+
+        return False, None
+
+
+    def should_scold(self, timestamp):
+        """Return whether dog should be scolded, and the reason"""
+
+        print(f"SHOULD_SCOLD")
+        print(f"============")
+        print(f"{self.timer.timedelta_to_checkpoint(timestamp, 'bad')} vs {self.scold_cooldown}")
+        if self.timer.timedelta_to_checkpoint(timestamp, 'bad') < self.scold_cooldown:
+            # In scold cooldown
+            return False, None
+
+        scold_window = self.events_in_window[(timestamp - self.events_in_window['t_end']) < self.scold_response_window]
+
+        if scold_window.empty:
+            # There are no events so nothing to scold
+            return False, None
+
+        print(f"threshold: {scold_window['pressure_sum'].sum()} > {self.scold_threshold}? {scold_window['pressure_sum'].sum() > self.scold_threshold}")
+        print(f"trigger: {scold_window.iloc[-1]['pressure_sum']} > {self.scold_trigger}? {scold_window.iloc[-1]['pressure_sum'] > self.scold_trigger}")
+
+        if scold_window['pressure_sum'].sum() > self.scold_threshold and scold_window.iloc[-1]['pressure_sum'] > self.scold_trigger:
+            return True, 'too_loud'
+
+        return False, None
 
 

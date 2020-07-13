@@ -71,8 +71,16 @@ class OwnerRecordings(object):
         sd.play(self.arrays[name], blocking=blocking)
 
 
-    def play_random(self, blocking=False):
-        choice = np.random.choice(self.names)
+    def play_random(self, blocking=False, sentiment=None):
+        if sentiment is None:
+            names = self.names
+        else:
+            names = [k for k, v in self.sentiment.items() if v == sentiment]
+
+        if not len(names):
+            return
+
+        choice = np.random.choice(names)
         self.play(choice, blocking=blocking)
 
         return choice
