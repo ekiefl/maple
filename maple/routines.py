@@ -25,7 +25,7 @@ class MonitorDog(events.Monitor):
         A = lambda x: args.__dict__.get(x, None)
         self.response_thresh = A('response_thresh') or 5
         self.response_time = A('response_time') or 10
-        self.recalibration_rate = A('recalibration_rate') or 5
+        self.recalibration_rate = A('recalibration_rate') or 10000 # never recalibrate by default
         self.max_buffer_size = A('max_buffer_size') or 100
         self.cooldown = A('cooldown') or 3
         self.should_respond = not A('no_respond')
@@ -71,8 +71,8 @@ class MonitorDog(events.Monitor):
 
         t_in_sec = self.detector.timer.time_between_checkpoints('finish', 'start')
 
-        energy = utils.calc_energy(data) / (self.background_energy*t_in_sec/self.calibration_time)
-        pressure = utils.calc_mean_pressure(data)/self.background
+        energy = utils.calc_energy(data)
+        pressure = utils.calc_mean_pressure(data)
 
         event = {
             'event_id': self.event_id,
@@ -192,6 +192,9 @@ class Analysis(object):
     def run(self):
         self.histogram()
         self.psd()
+
+        # Enter interactive session
+        import pdb; pdb.set_trace()
 
 
     def histogram(self):
