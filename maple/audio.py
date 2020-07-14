@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 
 def PSD(data, fs=None):
     if not fs: fs = maple.RATE
-    return signal.welch(data, maple.RATE, scaling='spectrum')
+    return signal.welch(data, maple.RATE, scaling='density')
 
 
 def plot_PSD(data, fs=None):
