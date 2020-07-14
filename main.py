@@ -17,6 +17,7 @@ if __name__ == '__main__':
     ANALYZE = ap.add_argument_group('analyze', 'arguments for `analyze` mode')
     ANALYZE.add_argument('-s', '--session', required=None, help='Name of session to analyze')
     ANALYZE.add_argument('-p', '--path', required=None, help='fullpath of session to analyze')
+    ANALYZE.add_argument('-l', '--list', action='store_true', help='List all sources and exit')
 
     RECORD = ap.add_argument_group('record', 'arguments for `record` mode')
 

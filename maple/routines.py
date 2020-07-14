@@ -16,6 +16,8 @@ import argparse
 import sounddevice as sd
 import plotly.express as px
 
+from pathlib import Path
+
 
 class MonitorDog(events.Monitor):
     """Monitor your dog or boyfriend who won't stop singing"""
@@ -127,6 +129,22 @@ class Analysis(object):
         self.name = A('session')
         self.path = A('path')
         self.temp = A('temp')
+        self.list = A('list')
+
+        if self.temp:
+            self.db_dir = maple.db_dir_temp
+        else:
+            self.db_dir = maple.db_dir
+
+        self.names = sorted([x.stem for x in self.db_dir.glob('*') if not x.stem.startswith('.')])
+        if self.list:
+            for name in self.names:
+                print(name)
+            import sys
+            sys.exit()
+
+        if not self.path and not self.name:
+            self.name = self.names[-1]
 
         self.an = data.DBAnalysis(self.name, self.path, temp=self.temp)
         self.an.trim()
@@ -177,8 +195,8 @@ class Analysis(object):
 class RecordOwnerVoice(events.Monitor):
     """Record and store audio clips to yell at your dog"""
 
-    def __init__(self, args=argparse.ArgumentParser()):
-        events.Monitor.__init__(self, quiet=True)
+    def __init__(self, args=argparse.Namespace(quiet=True)):
+        events.Monitor.__init__(self, args)
 
         self.menu = {
             'home': {
