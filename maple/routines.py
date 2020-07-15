@@ -24,17 +24,21 @@ class MonitorDog(events.Monitor):
 
     def __init__(self, args = argparse.Namespace(quiet=True)):
 
-        A = lambda x: args.__dict__.get(x, None)
+        self.args = args
+
+        A = lambda x: self.args.__dict__.get(x, None)
         self.recalibration_rate = A('recalibration_rate') or 10000 # never recalibrate by default
         self.max_buffer_size = A('max_buffer_size') or 100
         self.temp = A('temp')
-        self.should_respond = not A('no_respond')
+        self.should_respond = A('should_respond')
 
         self.recalibration_rate = datetime.timedelta(minutes=self.recalibration_rate)
 
-        events.Monitor.__init__(self, args)
+        events.Monitor.__init__(self, self.args)
 
         self.db = DataBase(new_database=True, temp=self.temp)
+        self.db.set_meta_values({k: v for k, v in vars(args).items() if k in maple.config_parameters})
+
         self.event_cols = maple.db_structure['events']['names']
         self.events = pd.DataFrame({}, columns=self.event_cols)
 
@@ -43,7 +47,7 @@ class MonitorDog(events.Monitor):
 
         if self.should_respond:
             # This handles all response decision logic
-            self.responder = events.Responder(args)
+            self.responder = events.Responder(self.args)
 
             self.owner_event_cols = maple.db_structure['owner_events']['names']
             self.owner_events = pd.DataFrame({}, columns=self.owner_event_cols)
@@ -90,11 +94,14 @@ class MonitorDog(events.Monitor):
         self.buffer_size += 1
         self.event_id += 1
 
+        print(f"Event detected: ID={event['event_id']}; length={event['t_len']:.1f}s; pressure_sum={event['pressure_sum']:.5f}")
+
         return event
 
 
     def add_owner_event(self, owner_event):
-        self.owner_events = self.owner_events.append(owner_event, ignore_index=True)
+        if owner_event:
+            self.owner_events = self.owner_events.append(owner_event, ignore_index=True)
 
 
     def run(self):
@@ -106,9 +113,8 @@ class MonitorDog(events.Monitor):
             while True:
                 event = self.add_event(self.wait_for_event(timeout=True))
 
-                owner_event = self.responder.potentially_respond(event)
-                if owner_event:
-                    self.add_owner_event(owner_event)
+                if self.should_respond:
+                    self.add_owner_event(self.responder.potentially_respond(event))
 
                 if self.timer.timedelta_to_checkpoint(checkpoint_key='calibration') > self.recalibration_rate:
                     print('Overdue for calibration. Calibrating...')
@@ -121,6 +127,7 @@ class MonitorDog(events.Monitor):
         except KeyboardInterrupt:
             # FIXME call Analysis
             self.store_buffer()
+            self.db.disconnect()
 
 
 class Analysis(object):
@@ -153,7 +160,6 @@ class Analysis(object):
 
     def run(self):
         self.histogram()
-        self.psd()
 
         # Enter interactive session
         import pdb; pdb.set_trace()
@@ -175,20 +181,6 @@ class Analysis(object):
             opacity=0.3,
         )
 
-        fig.show()
-
-
-    def psd(self):
-        fig = px.line(
-            self.an.psds,
-            x='freq',
-            y='psd',
-            color='event_id',
-            labels={'freq': 'Frequency (Hz)', 'psd': 'PSD'},
-            title='Power Spectrum Densities of each event',
-            log_y=True,
-            log_x=True,
-        )
         fig.show()
 
 

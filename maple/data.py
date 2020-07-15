@@ -54,6 +54,22 @@ class DataBase(object):
         ]])
 
 
+    def set_meta_value(self, key, value):
+        self.remove_meta_key_value_pair(key)
+        self._exec('''INSERT INTO self VALUES(?,?)''', (key, value,))
+        self.commit()
+
+
+    def remove_meta_key_value_pair(self, key):
+        self._exec('''DELETE FROM self WHERE key="%s"''' % key)
+        self.commit()
+
+
+    def set_meta_values(self, d):
+        for k, v in d.items():
+            self.set_meta_value(k, v)
+
+
     def get_table_as_dataframe(self, table_name, columns_of_interest=None):
         table_structure = self.get_table_structure(table_name)
 
@@ -79,7 +95,9 @@ class DataBase(object):
 
     def create_self(self):
         self._exec('''CREATE TABLE self (key text, value text)''')
-        self._exec('''INSERT INTO self VALUES(?,?)''', ('id', self.db_id))
+
+        self.set_meta_value('id', self.db_id)
+        self.set_meta_value('start', str(datetime.datetime.now()))
         self.commit()
 
 
@@ -114,6 +132,9 @@ class DataBase(object):
 
 
     def disconnect(self):
+        """Disconnect and potentially update self table values"""
+
+        self.set_meta_value('end', datetime.datetime.now())
         self.conn.commit()
         self.conn.close()
 

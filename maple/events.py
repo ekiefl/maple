@@ -418,7 +418,7 @@ class Responder(object):
         if self.warn is None:
             self.warn = False
 
-        self.should_respond = not A('no_respond')
+        self.should_respond = A('should_respond')
 
         # Cast everything as datetime
         self.response_window = datetime.timedelta(minutes=max([
@@ -463,6 +463,8 @@ class Responder(object):
 
     def respond(self, sentiment, reason):
         """Play owner recording and return an event dictionary"""
+
+        print(f"Playing owner response: {sentiment}, {reason}")
         name = self.owner.play_random(blocking=True, sentiment=sentiment)
         self.timer.make_checkpoint(sentiment, overwrite=True)
 
@@ -476,12 +478,13 @@ class Responder(object):
             'sentiment': sentiment,
         }
 
+
         return owner_event
 
 
     def potentially_respond(self, event):
         if not self.should_respond:
-            return
+            return None
 
         self.update_window(event)
         timestamp = self.timer.timestamp()
@@ -512,9 +515,6 @@ class Responder(object):
 
         if praise_window.empty:
             return True, 'quiet'
-
-        print(f"num_events: {praise_window.shape[0]} <= {self.praise_max_events}? {praise_window.shape[0] <= self.praise_max_events}")
-        print(f"max_pressure_sum: {praise_window['pressure_sum'].max()} <= {self.praise_max_pressure_sum}? {praise_window['pressure_sum'].max() <= self.praise_max_pressure_sum}")
 
         if praise_window.shape[0] <= self.praise_max_events and praise_window['pressure_sum'].max() <= self.praise_max_pressure_sum:
             return True, 'quiet'

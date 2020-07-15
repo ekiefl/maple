@@ -1,0 +1,54 @@
+[general]
+# Recalibrate after this many minutes has passed
+recalibration_rate = 10000
+# Store events into DB whenever this many dog events occur. No reason to set this lower than 100
+max_buffer_size = 100
+
+[respond]
+# Should there be owner responses? If 0, all other parameters in this section are irrelevant
+should_respond = 0
+# Should the owner praise?
+praise = 1
+# The timeframe when considering if to praise (minutes)
+praise_response_window = 2
+# The max number of events that should be within timeframe to consider praising
+praise_max_events = 10
+# The maximum pressure sum of any individual event in the timeframe to consider praising
+praise_max_pressure_sum = 0.01
+# After praising, wait this many minutes to consider praising again.
+praise_cooldown = 2
+# Should the owner scold?
+scold = 0
+# The timeframe when considering if to praise (minutes)
+scold_response_window = 0.5
+# The sum of pressure sums in timeframe to consider scolding
+scold_threshold = 0.7
+# The pressure sum of the event required to trigger scolding
+scold_trigger = 0.03
+# After scolding, wait this many minutes to consider scolding again.
+scold_cooldown = 5
+# Warning has not been implemented. These do nothing
+warn = 0
+warn_response_window = 0.25
+warn_cooldown = 1
+
+[calibration]
+# The length of the audio in seconds that is used to calibrate
+calibration_time = 3
+# The standard deviation divided by the mean of the audio signal must be less than this value to be considered calibrated
+calibration_threshold = 0.3
+# After this many failed attemps, the calibration_threshold will be increased by 0.1 and the process is repeated.
+calibration_tries = 4
+
+[detector]
+# Standard deviations above background noise to consider start an event
+event_start_threshold = 4
+# The number of chunks in a row that must exceed event_start_threshold in order to start an event
+num_consecutive = 4
+# Standard deviations above background noise to end an event
+event_end_threshold = 4
+# The number of seconds after a chunk dips below event_end_threshold that must pass for the event to
+# end. If during this period a chunk exceeds event_start_threshold, the event is sustained
+seconds = 0.25
+# If an event lasts longer than this many seconds, everything is recalibrated
+hang_time = 30
