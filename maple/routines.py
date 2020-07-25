@@ -104,7 +104,21 @@ class MonitorDog(events.Monitor):
             self.owner_events = self.owner_events.append(owner_event, ignore_index=True)
 
 
+    def play_sample_until_user_happy(self):
+        recs = OwnerRecordings()
+        while True:
+            recs.play_random(sentiment='good', blocking=False)
+            response = input('(r) to replay, (s) to start: ')
+            if response == 'r':
+                continue
+            elif response == 's':
+                break
+
+
     def run(self):
+        if self.should_respond:
+            self.play_sample_until_user_happy()
+
         self.setup()
         self.timer = utils.Timer()
         self.timer.make_checkpoint('calibration') # just calibrated
