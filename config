@@ -6,7 +6,7 @@ max_buffer_size = 100
 
 [respond]
 # Should there be owner responses? If 0, all other parameters in this section are irrelevant
-should_respond = 1
+should_respond = 0
 # Should the owner praise?
 praise = 1
 # The timeframe when considering if to praise (minutes)
@@ -18,11 +18,11 @@ praise_max_pressure_sum = 0.01
 # After praising, wait this many minutes to consider praising again.
 praise_cooldown = 2
 # Should the owner scold?
-scold = 0
+scold = 1
 # The timeframe when considering if to praise (minutes)
-scold_response_window = 0.5
+scold_response_window = 1.0
 # The sum of pressure sums in timeframe to consider scolding
-scold_threshold = 0.7
+scold_threshold = 1.4
 # The pressure sum of the event required to trigger scolding
 scold_trigger = 0.03
 # After scolding, wait this many minutes to consider scolding again.

@@ -107,7 +107,7 @@ class MonitorDog(events.Monitor):
     def play_sample_until_user_happy(self):
         recs = OwnerRecordings()
         while True:
-            recs.play_random(sentiment='good', blocking=False)
+            recs.play_random(blocking=False)
             response = input('(r) to replay, (s) to start: ')
             if response == 'r':
                 continue
