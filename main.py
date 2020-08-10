@@ -99,7 +99,7 @@ class Monitor(object):
             tries = 0
             while True:
                 for i in range(running_avg_domain):
-                    power_vals.append(utils.calc_power(self.read_chunk()))
+                    power_vals.append(calc_power(self.read_chunk()))
 
                 # Test if threshold met
                 power_vals = np.array(power_vals)
@@ -134,7 +134,14 @@ class Monitor(object):
             dt = self.dt,
         )
 
-        self.wait_for_event()
+        self.wait_for_events()
+
+
+    def wait_for_events(self):
+        while True:
+            self.wait_for_event()
+
+            # Do anything you want here
 
 
     def wait_for_event(self, log=True):
@@ -158,7 +165,7 @@ class Monitor(object):
         Pitch is indicated with 'o' bars, amplitude is indicated with '-'
         """
 
-        power = utils.calc_power(data)
+        power = calc_power(data)
         bars = "-"*int(1000*power/2**16)
 
         print("%05d %s" % (power, bars))
@@ -310,7 +317,7 @@ class Detector(object):
         """Takes in data and updates event transition variables if need be"""
 
         # Calculate power of frame
-        power = utils.calc_power(data)
+        power = calc_power(data)
 
         self.update_event_states(power)
 
