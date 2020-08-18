@@ -31,6 +31,8 @@ class MonitorDog(events.Monitor):
         self.max_buffer_size = A('max_buffer_size') or 100
         self.temp = A('temp')
         self.should_respond = A('should_respond')
+        self.praise = A('praise')
+        self.scold = A('scold')
 
         self.recalibration_rate = datetime.timedelta(minutes=self.recalibration_rate)
 
@@ -107,7 +109,11 @@ class MonitorDog(events.Monitor):
     def play_sample_until_user_happy(self):
         recs = OwnerRecordings()
         while True:
-            recs.play_random(blocking=False)
+            if self.praise:
+                recs.play_random(blocking=True, sentiment='good')
+            if self.scold:
+                recs.play_random(blocking=True, sentiment='bad')
+
             response = input('(r) to replay, (s) to start: ')
             if response == 'r':
                 continue
