@@ -14,6 +14,7 @@ if __name__ == '__main__':
     ap.add_argument('-q', '--quiet', action='store_true', help='Be quieter')
 
     RUN = ap.add_argument_group('run', 'arguments for `run` mode')
+    RUN.add_argument('-c', '--sound-check', action='store_true', help='Test sound output volumes for owner response before starting. Happens before calibration.')
 
     ANALYZE = ap.add_argument_group('analyze', 'arguments for `analyze` mode')
     ANALYZE.add_argument('-s', '--session', required=None, help='Name of session to analyze')

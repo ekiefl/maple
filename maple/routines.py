@@ -33,6 +33,7 @@ class MonitorDog(events.Monitor):
         self.should_respond = A('should_respond')
         self.praise = A('praise')
         self.scold = A('scold')
+        self.sound_check = A('sound_check')
 
         self.recalibration_rate = datetime.timedelta(minutes=self.recalibration_rate)
 
@@ -122,7 +123,7 @@ class MonitorDog(events.Monitor):
 
 
     def run(self):
-        if self.should_respond:
+        if self.should_respond and self.sound_check:
             self.play_sample_until_user_happy()
 
         self.setup()
