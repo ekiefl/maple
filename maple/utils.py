@@ -5,9 +5,27 @@ import maple
 import time
 import gzip
 import numpy as np
+import pyaudio
 import datetime
 
 from collections import OrderedDict
+
+def get_mic_id():
+    p = pyaudio.PyAudio()
+    info = p.get_host_api_info_by_index(0)
+    numdevices = info.get('deviceCount')
+
+    mics = {}
+    for i in range(numdevices):
+        if (p.get_device_info_by_host_api_device_index(0, i).get('maxInputChannels')) > 0:
+            mics[p.get_device_info_by_host_api_device_index(0, i).get('name')] = i
+
+    try:
+        return mics[maple.config['general']['microphone']]
+    except:
+        mic_names = ", ".join(["'" + x + "'" for x in list(mics.keys())])
+        raise ValueError(f"Couldn't find the mic '{maple.config['general']['microphone']}'. Here are the mics that "
+                         f"exist: {mic_names}")
 
 
 def calc_energy(data):

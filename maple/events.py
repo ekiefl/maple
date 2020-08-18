@@ -29,6 +29,7 @@ class Stream(object):
             rate = maple.RATE,
             input = True,
             frames_per_buffer = maple.CHUNK,
+            input_device_index = utils.get_mic_id(),
             start = False, # To read from stream, self.stream.start_stream must be called
         )
 
