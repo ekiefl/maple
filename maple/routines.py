@@ -6,7 +6,7 @@ import maple.audio as audio
 import maple.utils as utils
 import maple.events as events
 
-from maple.data import DataBase
+from maple.data import DataBase, SessionAnalysis
 from maple.owner_recordings import OwnerRecordings
 
 import time
@@ -153,6 +153,8 @@ class MonitorDog(events.Monitor):
 
 class Analysis(object):
     def __init__(self, args=argparse.ArgumentParser()):
+        """FIXME This will analyze across sessions in the future"""
+
         A = lambda x: args.__dict__.get(x, None)
         self.name = A('session')
         self.path = A('path')
@@ -174,9 +176,8 @@ class Analysis(object):
         if not self.path and not self.name:
             self.name = self.names[-1]
 
-        self.an = data.DBAnalysis(self.name, self.path, temp=self.temp)
-        self.an.trim()
-        self.an.calc_PSDs()
+        self.session = data.SessionAnalysis(self.name, self.path, temp=self.temp)
+        self.session.calc_PSDs()
 
 
     def run(self):
@@ -190,7 +191,7 @@ class Analysis(object):
         hover_cols = ['event_id', 't_len', 'energy', 'power', 'pressure_mean', 'pressure_sum']
 
         fig = px.histogram(
-            self.an.dog,
+            self.session.dog,
             x="t_start",
             y="pressure_sum",
             color=None,

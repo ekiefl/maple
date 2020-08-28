@@ -139,7 +139,7 @@ class DataBase(object):
         self.conn.close()
 
 
-class DBAnalysis:
+class SessionAnalysis(DataBase):
     def __init__(self, name=None, path=None, temp=False):
         if (path and name) or not (path or name):
             raise ValueError("choose one of --path or --name")
@@ -152,7 +152,7 @@ class DBAnalysis:
             else:
                 self.db_path = maple.db_dir / name / 'events.db'
 
-        self.db = DataBase(db_path=self.db_path)
+        DataBase.__init__(self, db_path=self.db_path)
 
         self.get_dog_events()
         self.get_owner_events()
@@ -175,7 +175,7 @@ class DBAnalysis:
 
 
     def get_dog_events(self):
-        self.dog = self.db.get_table_as_dataframe('events')
+        self.dog = self.get_table_as_dataframe('events')
 
         self.dog['t_start'] = pd.to_datetime(self.dog['t_start'])
         self.dog['t_end'] = pd.to_datetime(self.dog['t_end'])
@@ -184,7 +184,7 @@ class DBAnalysis:
 
 
     def get_owner_events(self):
-        self.owner = self.db.get_table_as_dataframe('owner_events')
+        self.owner = self.get_table_as_dataframe('owner_events')
 
 
     def play(self, event_id):
@@ -199,15 +199,3 @@ class DBAnalysis:
             print(f"Playing:\n{df.loc[event_id, [x for x in df.columns if x != 'audio']]}\n")
             self.play(event_id)
 
-
-    def trim(self, left=2, right=2):
-        pass
-        #self.owner = self.owner.loc[
-        #    (self.owner['t_start'] > (self.owner['t_start'].iloc[0] + datetime.timedelta(minutes=left))) & \
-        #    (self.owner['t_start'] < (self.owner['t_start'].iloc[-1] - datetime.timedelta(minutes=right))), :
-        #]
-
-        #self.dog = self.dog.loc[
-        #    (self.dog['t_start'] > (self.dog['t_start'].iloc[0] + datetime.timedelta(minutes=left))) & \
-        #    (self.dog['t_start'] < (self.dog['t_start'].iloc[-1] - datetime.timedelta(minutes=right))), :
-        #]
