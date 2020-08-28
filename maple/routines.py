@@ -14,7 +14,11 @@ import datetime
 import pandas as pd
 import argparse
 import sounddevice as sd
+
 import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+from tabulate import tabulate
 
 from pathlib import Path
 
@@ -161,6 +165,8 @@ class Analysis(object):
         self.temp = A('temp')
         self.list = A('list')
 
+        self.bin_size = A('bin_size')
+
         if self.temp:
             self.db_dir = maple.db_dir_temp
         else:
@@ -181,29 +187,83 @@ class Analysis(object):
 
 
     def run(self):
-        self.histogram()
+        self.histogram(self.session)
 
         # Enter interactive session
         import pdb; pdb.set_trace()
 
 
-    def histogram(self):
-        hover_cols = ['event_id', 't_len', 'energy', 'power', 'pressure_mean', 'pressure_sum']
+    def histogram(self, session):
+        dog_hover_cols = ['t_start', 'event_id', 't_len', 'energy', 'power', 'pressure_mean', 'pressure_sum']
+        owner_hover_cols = ['t_start', 'response_to', 'name', 'reason', 'sentiment']
 
-        fig = px.histogram(
-            self.session.dog,
-            x="t_start",
-            y="pressure_sum",
-            color=None,
-            marginal="rug",
-            hover_data=hover_cols,
-            nbins=100,
-            labels={'t_start': 'Time', 'pressure_sum': 'Pressure'},
-            title='Barking distribution',
-            opacity=0.3,
+        color='#ADB9CB'
+        color2='#ED028C'
+
+        get_dog_event_string = lambda row: tabulate(pd.DataFrame(row[row.index.isin(dog_hover_cols)]), tablefmt='fancy_grid').replace('\n', '<br>')
+        get_owner_event_string = lambda row: tabulate(pd.DataFrame(row[row.index.isin(owner_hover_cols)]), tablefmt='fancy_grid').replace('\n', '<br>')
+
+        hover_data_dog = session.dog.apply(get_dog_event_string, axis=1).tolist()
+        hover_data_owner = session.owner.apply(get_owner_event_string, axis=1).tolist()
+
+        histogram = go.Histogram(
+            x=session.dog["t_start"],
+            y=session.dog["pressure_sum"],
+            histfunc="sum",
+            nbinsx=int(session.duration/self.bin_size),
+            name='Sound pressure',
+            marker={'color': color},
+            showlegend = False,
         )
 
+        n_dog_events = len(session.dog['t_start'])
+        n_owner_events = len(session.owner['t_start'])
+        dog_rug = dict(
+            mode = "markers",
+            name = "Events",
+            type = "scatter",
+            x = session.dog["t_start"].append(session.owner['t_start']),
+            y = ['Event'] * n_dog_events + ['Event'] * n_owner_events,
+            marker = dict(
+                color = [color] * n_dog_events + [color2] * n_owner_events,
+                symbol = "line-ns-open",
+                size = [10] * n_dog_events + [20] * n_owner_events,
+                line = dict(
+                    width = 2,
+                )
+            ),
+            showlegend = False,
+            text = hover_data_dog + hover_data_owner,
+            hoverinfo = 'text',
+            hoverlabel = dict(
+                font = dict(
+                    family='courier new',
+                    size=8,
+                ),
+                bgcolor='white',
+            ),
+        )
+
+        fig = go.Figure()
+        fig = make_subplots(rows=2, cols=1, row_width=[0.1, 0.9], shared_xaxes=True)
+        fig.add_trace(dog_rug, 2, 1)
+        fig.add_trace(histogram, 1, 1)
+        fig.update_layout(
+            template='none',
+            title="Barking distribution",
+            title_font_family="rockwell",
+            font_family="rockwell",
+            yaxis_title="Sound pressure [AU]",
+        )
+        fig.update_xaxes(matches='x')
         fig.show()
+
+        self.save_fig(fig, session.db_path.parent / 'histogram.html')
+
+
+    def save_fig(self, fig, path):
+        with open(path, 'w') as f:
+            f.write(fig.to_html(include_plotlyjs='cdn'))
 
 
 class RecordOwnerVoice(events.Monitor):

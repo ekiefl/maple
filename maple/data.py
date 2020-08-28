@@ -154,8 +154,13 @@ class SessionAnalysis(DataBase):
 
         DataBase.__init__(self, db_path=self.db_path)
 
+        self.get_meta()
         self.get_dog_events()
         self.get_owner_events()
+
+        self.start = datetime.datetime.strptime(self.meta.loc[self.meta['key'] == 'start', 'value'].iloc[0], '%Y-%m-%d %H:%M:%S.%f')
+        self.end = datetime.datetime.strptime(self.meta.loc[self.meta['key'] == 'end', 'value'].iloc[0], '%Y-%m-%d %H:%M:%S.%f')
+        self.duration = (self.end - self.start).total_seconds()
 
         self.psds = None
 
@@ -172,6 +177,10 @@ class SessionAnalysis(DataBase):
             self.psds['freq'] = np.concatenate((self.psds['freq'], f))
             self.psds['psd'] = np.concatenate((self.psds['psd'], psd))
             self.psds['event_id'] = np.concatenate((self.psds['event_id'], event_id * np.ones(len(psd), dtype=int)))
+
+
+    def get_meta(self):
+        self.meta = self.get_table_as_dataframe('self')
 
 
     def get_dog_events(self):

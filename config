@@ -1,6 +1,7 @@
 [general]
 # microphone
-microphone = USB PnP Audio Device
+microphone = Built-in Microphone
+#microphone = Built-in Microphone
 # Recalibrate after this many minutes has passed
 recalibration_rate = 10000
 # Store events into DB whenever this many dog events occur. No reason to set this lower than 100
@@ -21,14 +22,14 @@ praise_max_pressure_sum = 0.01
 praise_cooldown = 2
 # Should the owner scold?
 scold = 0
-# The timeframe when considering if to praise (minutes)
+# The timeframe when considering if to scold (minutes)
 scold_response_window = 1.0
 # The sum of pressure sums in timeframe to consider scolding
-scold_threshold = 1.4
+scold_threshold = 1.8
 # The pressure sum of the event required to trigger scolding
-scold_trigger = 0.03
+scold_trigger = 0.05
 # After scolding, wait this many minutes to consider scolding again.
-scold_cooldown = 5
+scold_cooldown = 3
 # Warning has not been implemented. These do nothing
 warn = 0
 warn_response_window = 0.25
@@ -54,3 +55,7 @@ event_end_threshold = 4
 seconds = 0.25
 # If an event lasts longer than this many seconds, everything is recalibrated
 hang_time = 20
+
+[analysis]
+# how many seconds should each bin be
+bin_size = 60
