@@ -210,7 +210,7 @@ class Analysis(object):
 
         color='#ADB9CB'
         color2='#ED028C' # scold
-        color3='#ED028C' # praise
+        color3='#01C702' # praise
 
         get_dog_event_string = lambda row: tabulate(pd.DataFrame(row[row.index.isin(dog_hover_cols)]), tablefmt='fancy_grid').replace('\n', '<br>')
         get_owner_event_string = lambda row: tabulate(pd.DataFrame(row[row.index.isin(owner_hover_cols)]), tablefmt='fancy_grid').replace('\n', '<br>')
@@ -233,18 +233,24 @@ class Analysis(object):
 
         n_dog_events = len(session.dog['t_start'])
         n_owner_events = len(session.owner['t_start'])
+        n_owner_praise = session.owner[session.owner['sentiment'] == 'good'].shape[0]
+        n_owner_scold = session.owner[session.owner['sentiment'] == 'bad'].shape[0]
+
+        data = session.dog["t_start"].append(session.owner.loc[session.owner['sentiment']=='bad', 't_start'])
+        data = data.append(session.owner.loc[session.owner['sentiment']=='good', 't_start'])
+
         dog_rug = dict(
             mode = "markers",
             name = "Events",
             type = "scatter",
-            x = session.dog["t_start"].append(session.owner['t_start']),
+            x = data,
             y = ['Event'] * n_dog_events + ['Event'] * n_owner_events,
             marker = dict(
-                color = [color] * n_dog_events + [color2] * n_owner_events,
+                color = [color] * n_dog_events + [color2] * n_owner_scold + [color3] * n_owner_praise,
                 symbol = "line-ns-open",
                 size = p.tolist() + [20] * n_owner_events,
                 line = dict(
-                    width = 1,
+                    width = [1] * n_dog_events + [2] * n_owner_events,
                 )
             ),
             showlegend = False,
