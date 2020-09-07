@@ -101,7 +101,7 @@ class MonitorDog(events.Monitor):
         self.buffer_size += 1
         self.event_id += 1
 
-        print(f"Event detected: ID={event['event_id']}; length={event['t_len']:.1f}s; pressure_sum={event['pressure_sum']:.5f}")
+        print(f"Event: ID={event['event_id']}; time={event['t_start']}; length={event['t_len']:.1f}s; pressure_sum={event['pressure_sum']:.5f}")
 
         return event
 
