@@ -11,6 +11,46 @@ import datetime
 import sounddevice as sd
 
 from pathlib import Path
+from scipy.io.wavfile import read as wav_read
+from scipy.io.wavfile import write as wav_write
+
+
+class OwnerRecordings(object):
+    def __init__(self):
+        self.dir = maple.owner_recordings_dir
+        self.dir.mkdir(exist_ok=True)
+
+        self.load()
+
+
+    def write(self, name, data, fs, sentiment=None):
+        """Write a numpy array to a .wav file
+
+        Parameters
+        ==========
+        name : str
+            Just the basename of the file, with no extensions
+
+        data : numpy array
+            A numpy array
+
+        fs : int
+            sampling freq
+
+        sentiment : str, None
+            label for the owner recording
+        """
+
+        output = self.dir/(name+'.wav')
+        wav_write(output, fs, data)
+
+        if self.summary is not None:
+            new_summary = self.summary.append({'name': name, 'sentiment': sentiment}, ignore_index=True)
+            new_summary.to_csv(self.dir/'summary.txt', sep='\t', index=False)
+        else:
+            pd.DataFrame({'name': [name], 'sentiment': [sentiment]}).to_csv(self.dir/'summary.txt', sep='\t', index=False)
+
+        self.load()
 
 
 class DataBase(object):
@@ -178,6 +218,8 @@ class SessionAnalysis(DataBase):
             self.psds['psd'] = np.concatenate((self.psds['psd'], psd))
             self.psds['event_id'] = np.concatenate((self.psds['event_id'], event_id * np.ones(len(psd), dtype=int)))
 
+        self.psds = pd.DataFrame(self.psds)
+
 
     def get_meta(self):
         self.meta = self.get_table_as_dataframe('self')
@@ -207,4 +249,9 @@ class SessionAnalysis(DataBase):
         for event_id in df.index:
             print(f"Playing:\n{df.loc[event_id, [x for x in df.columns if x != 'audio']]}\n")
             self.play(event_id)
+
+
+    def save_event_as_wav(self, event_id, path):
+        wav_write(path, maple.RATE, self.dog.loc[event_id, 'audio'])
+
 

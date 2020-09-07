@@ -27,7 +27,7 @@ scold_response_window = 1.0
 # The sum of pressure sums in timeframe to consider scolding
 scold_threshold = 1.8
 # The pressure sum of the event required to trigger scolding
-scold_trigger = 0.05
+scold_trigger = 0.15
 # After scolding, wait this many minutes to consider scolding again.
 scold_cooldown = 3
 # Warning has not been implemented. These do nothing

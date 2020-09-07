@@ -190,7 +190,18 @@ class Analysis(object):
         self.histogram(self.session)
 
         # Enter interactive session
-        import pdb; pdb.set_trace()
+        import ipdb; ipdb.set_trace()
+
+
+    def psd(self, session, ids=None):
+        if ids is not None:
+            df = session.psds[session.psds['event_id'].isin(ids)]
+        else:
+            df = session.psds
+
+        fig = px.line(df, x='freq', y='psd', color='event_id')
+        fig.update_layout(yaxis_type='log')
+        fig.show()
 
 
     def histogram(self, session):
@@ -198,7 +209,8 @@ class Analysis(object):
         owner_hover_cols = ['t_start', 'response_to', 'name', 'reason', 'sentiment']
 
         color='#ADB9CB'
-        color2='#ED028C'
+        color2='#ED028C' # scold
+        color3='#ED028C' # praise
 
         get_dog_event_string = lambda row: tabulate(pd.DataFrame(row[row.index.isin(dog_hover_cols)]), tablefmt='fancy_grid').replace('\n', '<br>')
         get_owner_event_string = lambda row: tabulate(pd.DataFrame(row[row.index.isin(owner_hover_cols)]), tablefmt='fancy_grid').replace('\n', '<br>')
@@ -216,6 +228,9 @@ class Analysis(object):
             showlegend = False,
         )
 
+        p = session.dog['pressure_sum']
+        p = 50 * (p - p.min()) / (p.max() - p.min()) + 2.5
+
         n_dog_events = len(session.dog['t_start'])
         n_owner_events = len(session.owner['t_start'])
         dog_rug = dict(
@@ -227,9 +242,9 @@ class Analysis(object):
             marker = dict(
                 color = [color] * n_dog_events + [color2] * n_owner_events,
                 symbol = "line-ns-open",
-                size = [10] * n_dog_events + [20] * n_owner_events,
+                size = p.tolist() + [20] * n_owner_events,
                 line = dict(
-                    width = 2,
+                    width = 1,
                 )
             ),
             showlegend = False,
@@ -245,7 +260,7 @@ class Analysis(object):
         )
 
         fig = go.Figure()
-        fig = make_subplots(rows=2, cols=1, row_width=[0.1, 0.9], shared_xaxes=True)
+        fig = make_subplots(rows=2, cols=1, row_width=[0.2, 0.8], shared_xaxes=True)
         fig.add_trace(dog_rug, 2, 1)
         fig.add_trace(histogram, 1, 1)
         fig.update_layout(
@@ -299,8 +314,6 @@ class RecordOwnerVoice(events.Monitor):
 
 
     def run(self):
-        print('Please be quiet. Establishing background noise...')
-        time.sleep(1)
         self.setup()
 
         while True:
