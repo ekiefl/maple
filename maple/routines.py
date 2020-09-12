@@ -34,7 +34,6 @@ class MonitorDog(events.Monitor):
         self.recalibration_rate = A('recalibration_rate') or 10000 # never recalibrate by default
         self.max_buffer_size = A('max_buffer_size') or 100
         self.temp = A('temp')
-        self.should_respond = A('should_respond')
         self.praise = A('praise')
         self.scold = A('scold')
         self.sound_check = A('sound_check')
@@ -52,12 +51,9 @@ class MonitorDog(events.Monitor):
         self.buffer_size = 0
         self.event_id = 0
 
-        if self.should_respond:
-            # This handles all response decision logic
-            self.responder = events.Responder(self.args)
-
-            self.owner_event_cols = maple.db_structure['owner_events']['names']
-            self.owner_events = pd.DataFrame({}, columns=self.owner_event_cols)
+        self.responder = events.Responder(self.args)
+        self.owner_event_cols = maple.db_structure['owner_events']['names']
+        self.owner_events = pd.DataFrame({}, columns=self.owner_event_cols)
 
         self.timer = None
 
@@ -66,10 +62,9 @@ class MonitorDog(events.Monitor):
         self.db.insert_rows_from_dataframe('events', self.events)
         self.events = pd.DataFrame({}, columns=self.event_cols)
 
-        if self.should_respond:
-            # Also store any owner responses
-            self.db.insert_rows_from_dataframe('owner_events', self.owner_events)
-            self.owner_events = pd.DataFrame({}, columns=self.owner_event_cols)
+        # Also store any owner responses
+        self.db.insert_rows_from_dataframe('owner_events', self.owner_events)
+        self.owner_events = pd.DataFrame({}, columns=self.owner_event_cols)
 
         self.buffer_size = 0
 
@@ -127,7 +122,7 @@ class MonitorDog(events.Monitor):
 
 
     def run(self):
-        if self.should_respond and self.sound_check:
+        if (self.praise or self.scold) and self.sound_check:
             self.play_sample_until_user_happy()
 
         self.setup()
@@ -138,8 +133,7 @@ class MonitorDog(events.Monitor):
             while True:
                 event = self.add_event(self.wait_for_event(timeout=True))
 
-                if self.should_respond:
-                    self.add_owner_event(self.responder.potentially_respond(event))
+                self.add_owner_event(self.responder.potentially_respond(event))
 
                 if self.timer.timedelta_to_checkpoint(checkpoint_key='calibration') > self.recalibration_rate:
                     print('Overdue for calibration. Calibrating...')

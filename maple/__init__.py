@@ -41,8 +41,8 @@ db_structure = {
         'types': ['integer', 'text', 'text', 'numeric', 'numeric', 'numeric', 'numeric', 'numeric', 'text', 'blob'],
     },
     'owner_events': {
-        'names': ['t_start', 'response_to', 'name', 'reason', 'sentiment'],
-        'types': ['text', 'integer', 'text', 'text', 'text'],
+        'names': ['t_start', 'response_to', 'name', 'reason', 'sentiment', 'action'],
+        'types': ['text', 'integer', 'text', 'text', 'text', 'text'],
     },
 }
 

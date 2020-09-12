@@ -396,12 +396,14 @@ class Responder(object):
         A = lambda x: args.__dict__.get(x, None)
 
         self.praise = A('praise')
+        if self.praise is None: self.praise = False
         self.praise_max_events = A('praise_max_events') or 10
         self.praise_max_pressure_sum = A('praise_max_pressure_sum') or 0.01
         self.praise_response_window = A('praise_response_window') or 2
         self.praise_cooldown = A('praise_cooldown') or 2
 
         self.scold = A('scold')
+        if self.scold is None: self.scold = False
         self.scold_threshold = A('scold_threshold') or 0.7
         self.scold_trigger = A('scold_trigger') or 0.03
         self.scold_response_window = A('scold_response_window') or 0.5
@@ -409,23 +411,15 @@ class Responder(object):
 
         # FIXME not implemented
         self.warn = A('warn')
+        if self.warn is None: self.warn = False
         self.warn_response_window = A('warn_response_window') or 0.25
         self.warn_cooldown = A('warn_cooldown') or 1
 
-        if self.praise is None:
-            self.praise = False
-        if self.scold is None:
-            self.scold = False
-        if self.warn is None:
-            self.warn = False
-
-        self.should_respond = A('should_respond')
-
         # Cast everything as datetime
         self.response_window = datetime.timedelta(minutes=max([
-            self.warn_response_window if self.warn else 0,
-            self.scold_response_window if self.scold else 0,
-            self.praise_response_window if self.praise else 0,
+            self.warn_response_window,
+            self.scold_response_window,
+            self.praise_response_window,
         ]))
 
         self.warn_response_window = datetime.timedelta(minutes=self.warn_response_window)
@@ -465,28 +459,28 @@ class Responder(object):
     def respond(self, sentiment, reason):
         """Play owner recording and return an event dictionary"""
 
-        print(f"Playing owner response: {sentiment}, {reason}")
-        name = self.owner.play_random(blocking=True, sentiment=sentiment)
         self.timer.make_checkpoint(sentiment, overwrite=True)
-
         response_to = self.events_in_window['event_id'].iloc[-1] if sentiment != 'good' else -1
 
         owner_event = {
             't_start': self.timer.checkpoints[sentiment],
-            'name': name,
             'response_to': response_to,
             'reason': reason,
             'sentiment': sentiment,
         }
 
+        if (self.praise and sentiment == 'good') or (self.scold and sentiment == 'bad'):
+            print(f"Playing owner response: {sentiment}, {reason}")
+            owner_event['name'] = self.owner.play_random(blocking=True, sentiment=sentiment)
+            owner_event['action'] = 'audio'
+        else:
+            owner_event['name'] = None
+            owner_event['action'] = None
 
         return owner_event
 
 
     def potentially_respond(self, event):
-        if not self.should_respond:
-            return None
-
         self.update_window(event)
         timestamp = self.timer.timestamp()
 
@@ -506,9 +500,7 @@ class Responder(object):
     def should_praise(self, timestamp):
         """Return whether dog should be praised, and the reason"""
 
-        if not self.praise:
-            return False, None
-        elif self.timer.timedelta_to_checkpoint(timestamp, 'good') < self.praise_cooldown:
+        if self.timer.timedelta_to_checkpoint(timestamp, 'good') < self.praise_cooldown:
             # In praise cooldown
             return False, None
 
@@ -526,8 +518,6 @@ class Responder(object):
     def should_scold(self, timestamp):
         """Return whether dog should be scolded, and the reason"""
 
-        if not self.scold:
-            return False, None
         if self.timer.timedelta_to_checkpoint(timestamp, 'bad') < self.scold_cooldown:
             # In scold cooldown
             return False, None

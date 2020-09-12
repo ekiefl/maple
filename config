@@ -1,6 +1,6 @@
 [general]
 # microphone
-microphone = Built-in Microphone
+microphone = USB PnP Audio Device
 #microphone = Built-in Microphone
 # Recalibrate after this many minutes has passed
 recalibration_rate = 10000
@@ -8,8 +8,6 @@ recalibration_rate = 10000
 max_buffer_size = 100
 
 [respond]
-# Should there be owner responses? If 0, all other parameters in this section are irrelevant
-should_respond = 1
 # Should the owner praise?
 praise = 1
 # The timeframe when considering if to praise (minutes)
