@@ -219,7 +219,7 @@ class Analysis(object):
             xbins=dict(
                 start=session.dog["t_start"].iloc[0],
                 end=session.dog["t_start"].iloc[-1],
-                size=60e3
+                size=self.bin_size*10**3
             ),
             name='Sound pressure',
             marker={'color': color},
