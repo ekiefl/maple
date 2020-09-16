@@ -216,7 +216,11 @@ class Analysis(object):
             x=session.dog["t_start"],
             y=session.dog["pressure_sum"],
             histfunc="sum",
-            nbinsx=int(session.duration/self.bin_size),
+            xbins=dict(
+                start=session.dog["t_start"].iloc[0],
+                end=session.dog["t_start"].iloc[-1],
+                size=60e3
+            ),
             name='Sound pressure',
             marker={'color': color},
             showlegend = False,

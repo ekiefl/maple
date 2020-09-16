@@ -52,7 +52,7 @@ event_end_threshold = 4
 # end. If during this period a chunk exceeds event_start_threshold, the event is sustained
 seconds = 0.25
 # If an event lasts longer than this many seconds, everything is recalibrated
-hang_time = 20
+hang_time = 180
 
 [analysis]
 # how many seconds should each bin be

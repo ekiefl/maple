@@ -242,12 +242,16 @@ class SessionAnalysis(DataBase):
         sd.play(self.dog.loc[event_id, 'audio'], blocking=True)
 
 
-    def play_many(self, df=None):
+    def play_many(self, start=None, stop=None):
         """Play in order of df"""
-        if df is None: df = self.dog
 
-        for event_id in df.index:
-            print(f"Playing:\n{df.loc[event_id, [x for x in df.columns if x != 'audio']]}\n")
+        if start is None:
+            start = 0
+        if stop is None:
+            stop = self.dog.index[-1]
+
+        for event_id in range(start, stop+1):
+            print(f"Playing:\n{self.dog.loc[event_id, [x for x in self.dog.columns if x != 'audio']]}\n")
             self.play(event_id)
 
 
