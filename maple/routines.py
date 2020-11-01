@@ -153,6 +153,8 @@ class MonitorDog(events.Monitor):
                     self.store_buffer()
                     self.db.disconnect()
 
+                    self.args.path = self.db.db_path
+                    Analysis(self.args).run()
                     break
                 elif keep == 'n':
                     self.db.self_destruct()
