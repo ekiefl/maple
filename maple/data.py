@@ -6,6 +6,7 @@ import maple.audio as audio
 
 import numpy as np
 import pandas as pd
+import shutil
 import sqlite3
 import datetime
 import sounddevice as sd
@@ -177,6 +178,11 @@ class DataBase(object):
         self.set_meta_value('end', datetime.datetime.now())
         self.conn.commit()
         self.conn.close()
+
+
+    def self_destruct(self):
+        self.disconnect()
+        shutil.rmtree(self.db_path.parent)
 
 
 class SessionAnalysis(DataBase):
