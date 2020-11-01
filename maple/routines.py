@@ -144,9 +144,21 @@ class MonitorDog(events.Monitor):
                     self.store_buffer()
 
         except KeyboardInterrupt:
-            # FIXME call Analysis
-            self.store_buffer()
-            self.db.disconnect()
+            while True:
+                keep = input("Do you want to keep this? (y/n)\n")
+
+                if keep == 'y':
+                    self.db.set_meta_value('background_mean', self.background)
+                    self.db.set_meta_value('background_std', self.background_std)
+                    self.store_buffer()
+                    self.db.disconnect()
+
+                    break
+                elif keep == 'n':
+                    self.db.self_destruct()
+                    break
+                else:
+                    print("Invalid option.")
 
 
 class Analysis(object):
