@@ -180,9 +180,12 @@ class DataBase(object):
         self.conn.close()
 
 
-    def self_destruct(self):
+    def self_destruct(self, rm_dir=False, are_you_sure=False):
         self.disconnect()
-        shutil.rmtree(self.db_path.parent)
+        self.db_path.unlink()
+
+        if rm_dir and are_you_sure:
+            shutil.rmtree(self.db_path.parent)
 
 
 class SessionAnalysis(DataBase):
