@@ -71,6 +71,7 @@ class MonitorDog(events.Monitor):
 
     def add_event(self, data):
         """Add event to self.events, taking the event audio (numpy array) as input"""
+
         if data is None:
             return None
 
@@ -157,7 +158,7 @@ class MonitorDog(events.Monitor):
                     Analysis(self.args).run()
                     break
                 elif keep == 'n':
-                    self.db.self_destruct()
+                    self.db.self_destruct(rm_dir=True, are_you_sure=True)
                     break
                 else:
                     print("Invalid option.")
@@ -401,7 +402,5 @@ class RecordOwnerVoice(events.Monitor):
         print('Stored voice input...')
         print(f"You now have {self.recs.num} recordings.")
         self.state = 'home'
-
-
 
 
