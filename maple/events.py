@@ -55,24 +55,18 @@ class Stream(object):
 
 
 class Detector(object):
-    def __init__(self, background_std, background, start_thresh, end_thresh, num_consecutive, seconds, dt, hang_time, wait_timeout, quiet=True):
+    def __init__(self, start_thresh, end_thresh, num_consecutive, seconds, dt, hang_time, wait_timeout, quiet=True):
         """Manages the detection of events
 
         Parameters
         ==========
-        background_std : float
-            The standard deviation of the background noise.
-
-        background : float
-            The mean of the background noise.
-
         start_thresh : float
-            The number of standard deviations above the background noise that the pressure must exceed
-            for a data point to be considered as the start of an event.
+            The pressure that must exceeded for a data point to be considered as the start of an
+            event.
 
         end_thresh : float
-            The number of standard deviations above the background noise that the pressure dip below
-            for a data point to be considered as the end of an event.
+            The pressure value that the pressure must dip below for a data point to be considered as
+            the end of an event.
 
         num_consecutive : int
             The number of frames needed that must consecutively be above the threshold to be
@@ -99,14 +93,10 @@ class Detector(object):
         self.quiet = quiet
 
         self.dt = dt
-        self.bg_std = background_std
-        self.bg_mean = background
+        self.start_thresh = start_thresh
+        self.end_thresh = end_thresh
         self.seconds = seconds
         self.num_consecutive = num_consecutive
-
-        # Recast the start and end thresholds in terms of pressure values
-        self.start_thresh = self.bg_mean + start_thresh*self.bg_std
-        self.end_thresh = self.bg_mean + end_thresh*self.bg_std
 
         self.hang_time = datetime.timedelta(seconds=hang_time)
         self.wait_timeout = datetime.timedelta(seconds=wait_timeout)
@@ -326,11 +316,13 @@ class Monitor(object):
     def recalibrate(self):
         self.calibrate_background_noise()
 
+        # Recast the start and end thresholds in terms of pressure values
+        start_thresh = self.background + self.event_start_threshold * self.background_std
+        end_thresh = self.background + self.event_end_threshold * self.background_std
+
         self.detector = Detector(
-            background_std = self.background_std,
-            background = self.background,
-            start_thresh = self.event_start_threshold,
-            end_thresh = self.event_end_threshold,
+            start_thresh = start_thresh,
+            end_thresh = end_thresh,
             seconds = self.seconds,
             num_consecutive = self.num_consecutive,
             hang_time = self.hang_time,
