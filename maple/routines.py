@@ -359,7 +359,6 @@ class RecordOwnerVoice(events.Monitor):
         if response == 'l':
             print('Played recording...')
             print(self.recording.dtype)
-            self.recording = audio.denoise(self.recording, self.background_audio)
             self.recording = audio.bandpass(self.recording, 150, 20000)
             sd.play(self.recording, blocking=True)
         elif response == 'r':

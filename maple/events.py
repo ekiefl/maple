@@ -242,7 +242,6 @@ class Monitor(object):
         self.stream = None
         self.background = None
         self.background_std = None
-        self.background_audio = None
 
         self.detector = None
         self.event_recs = {}
@@ -287,11 +286,8 @@ class Monitor(object):
                 pressure_vals = np.array(pressure_vals)
                 ratio = np.std(pressure_vals)/np.mean(pressure_vals)
                 if ratio < calibration_thresh:
-                    self.background_audio = np.concatenate(audio)
-                    self.background = np.mean(pressure_vals) # same as utils.calc_mean_pressure(self.background_audio)
+                    self.background = np.mean(pressure_vals)
                     self.background_std = np.std(pressure_vals)
-                    self.background_energy = utils.calc_energy(self.background_audio)
-                    self.background_power = self.background_energy/self.calibration_time
                     print('Calibrated.')
                     return
 
