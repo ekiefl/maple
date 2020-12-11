@@ -12,6 +12,7 @@ if __name__ == '__main__':
     ap.add_argument('mode', choices=('run', 'record', 'analyze'), help="What mode do you want to run in?")
     ap.add_argument('-t', '--temp', action='store_true', help='Use to search for and save DB sessions in data/temp')
     ap.add_argument('-q', '--quiet', action='store_true', help='Be quieter')
+    ap.add_argument('-r', '--randomize', action='store_true', help='Randomize whether to praise and scold')
 
     RUN = ap.add_argument_group('run', 'arguments for `run` mode')
     RUN.add_argument('-c', '--sound-check', action='store_true', help='Test sound output volumes for owner response before starting. Happens before calibration.')

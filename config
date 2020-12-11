@@ -40,6 +40,12 @@ calibration_time = 3
 calibration_threshold = 0.3
 # After this many failed attemps, the calibration_threshold will be increased by 0.1 and the process is repeated.
 calibration_tries = 4
+# Use hard-coded background
+skip_calibration = 0
+# predetermined background mean (only used if skip_calibration = 1)
+background_mean_preset = 0.0010
+# predetermined background mean (only used if skip_calibration = 1)
+background_std_preset = 0.0003
 
 [detector]
 # Standard deviations above background noise to consider start an event

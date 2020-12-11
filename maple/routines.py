@@ -31,6 +31,12 @@ class MonitorDog(events.Monitor):
         self.args = args
 
         A = lambda x: self.args.__dict__.get(x, None)
+        self.randomize = A('randomize')
+        if self.randomize:
+            import random
+            self.args.scold = random.choice([True, False])
+            self.args.praise = random.choice([True, False])
+
         self.recalibration_rate = A('recalibration_rate') or 10000 # never recalibrate by default
         self.max_buffer_size = A('max_buffer_size') or 100
         self.temp = A('temp')
