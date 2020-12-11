@@ -318,7 +318,7 @@ class RecordOwnerVoice(events.Monitor):
                 'function': self.menu_handle,
             },
             'review': {
-                'msg': 'Recording finished. [l] to listen, [r] to retry, [k] to keep. Press [q] to quit. Response: ',
+                'msg': 'Recording finished. [l] to listen, [1] to make quieter, [9] to make louder, [r] to retry, [k] to keep. Press [q] to quit. Response: ',
                 'function': self.review_handle
             },
             'name': {
@@ -364,9 +364,11 @@ class RecordOwnerVoice(events.Monitor):
     def review_handle(self, response):
         if response == 'l':
             print('Played recording...')
-            print(self.recording.dtype)
-            self.recording = audio.bandpass(self.recording, 150, 20000)
             sd.play(self.recording, blocking=True)
+        elif response == '1':
+            self.recording = (self.recording/2).astype(maple.ARRAY_DTYPE)
+        elif response == '9':
+            self.recording = (self.recording*2).astype(maple.ARRAY_DTYPE)
         elif response == 'r':
             print('Listening for voice input...')
             self.recording = self.wait_for_event()
@@ -403,6 +405,7 @@ class RecordOwnerVoice(events.Monitor):
             print('invalid input')
             return
 
+        self.recording = audio.bandpass(self.recording, 150, 20000)
         self.recs.write(self.name, self.recording, maple.RATE, sentiment)
         print('Stored voice input...')
         print(f"You now have {self.recs.num} recordings.")

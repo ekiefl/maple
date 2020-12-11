@@ -9,11 +9,11 @@ max_buffer_size = 100
 
 [respond]
 # Should the owner praise?
-praise = 1
+praise = 0
 # The timeframe when considering if to praise (minutes)
 praise_response_window = 2
 # The max number of events that should be within timeframe to consider praising
-praise_max_events = 10
+praise_max_events = 20
 # The maximum pressure sum of any individual event in the timeframe to consider praising
 praise_max_pressure_sum = 0.01
 # After praising, wait this many minutes to consider praising again.
@@ -23,11 +23,11 @@ scold = 0
 # The timeframe when considering if to scold (minutes)
 scold_response_window = 1.0
 # The sum of pressure sums in timeframe to consider scolding
-scold_threshold = 1.8
+scold_threshold = 4.0
 # The pressure sum of the event required to trigger scolding
-scold_trigger = 0.15
+scold_trigger = 0.50
 # After scolding, wait this many minutes to consider scolding again.
-scold_cooldown = 3
+scold_cooldown = 2
 # Warning has not been implemented. These do nothing
 warn = 0
 warn_response_window = 0.25
@@ -41,7 +41,7 @@ calibration_threshold = 0.3
 # After this many failed attemps, the calibration_threshold will be increased by 0.1 and the process is repeated.
 calibration_tries = 4
 # Use hard-coded background
-skip_calibration = 0
+skip_calibration = 1
 # predetermined background mean (only used if skip_calibration = 1)
 background_mean_preset = 0.0010
 # predetermined background mean (only used if skip_calibration = 1)

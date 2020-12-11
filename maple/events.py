@@ -234,6 +234,9 @@ class Monitor(object):
         self.calibration_tries = A('calibration_tries') or 4 # Number of running windows tried until threshold is doubled
         self.event_start_threshold = A('event_start_threshold') or 4 # standard deviations above background noise to start an event
         self.event_end_threshold = A('event_end_threshold') or 4 # standard deviations above background noise to end an event
+        self.skip_calibration = A('skip_calibration') or 0
+        self.background_mean_preset = A('background_mean_preset')
+        self.background_std_preset = A('background_std_preset')
         self.seconds = A('seconds') or 0.25 # see Detector docstring
         self.num_consecutive = A('num_consecutive') or 4 # see Detector docstring
         self.hang_time = A('hang_time') or 20 # see Detector docstring
@@ -264,6 +267,13 @@ class Monitor(object):
         background. Otherwise, it is tried again. If it fails too many times, the threshold is
         increased and the process is repeated.
         """
+
+        if self.skip_calibration:
+            print('Skipping calibration.')
+            self.background = self.background_mean_preset
+            self.background_std = self.background_std_preset
+            return
+
         print('Calibrating.')
 
         pressure_vals = []
