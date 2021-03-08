@@ -56,6 +56,8 @@ class OwnerRecordings(object):
 
 class DataBase(object):
     def __init__(self, db_path=None, new_database=False, temp=False):
+        self.new_database = new_database
+
         if db_path is None:
             if temp:
                 self.db_path = maple.db_dir_temp / self.get_default_db_id() / 'events.db'
@@ -68,16 +70,16 @@ class DataBase(object):
 
         self.db_id = self.db_path.parent.stem
 
-        if new_database and self.db_path.exists():
+        if self.new_database and self.db_path.exists():
             raise ValueError(f"db {self.db_path} already exists.")
-        elif not new_database and not self.db_path.exists:
-            raise ValueError(f"db {self.db_path} doesn't exist.")
+        elif not self.new_database and not self.db_path.exists:
+            raise ValueError(f"db {self.db_path} doesn't exists.")
 
         self.conn = sqlite3.connect(self.db_path)
         self.conn.text_factory = str
         self.cursor = self.conn.cursor()
 
-        if new_database:
+        if self.new_database:
             self.create_self()
             self.create_table('events', maple.db_structure['events']['names'], maple.db_structure['events']['types'])
             self.create_table('owner_events', maple.db_structure['owner_events']['names'], maple.db_structure['owner_events']['types'])
@@ -175,7 +177,9 @@ class DataBase(object):
     def disconnect(self):
         """Disconnect and potentially update self table values"""
 
-        self.set_meta_value('end', datetime.datetime.now())
+        if self.new_database:
+            self.set_meta_value('end', datetime.datetime.now())
+
         self.conn.commit()
         self.conn.close()
 
@@ -211,7 +215,17 @@ class SessionAnalysis(DataBase):
         self.end = datetime.datetime.strptime(self.meta.loc[self.meta['key'] == 'end', 'value'].iloc[0], '%Y-%m-%d %H:%M:%S.%f')
         self.duration = (self.end - self.start).total_seconds()
 
+        self.trim_ends(minutes=1)
+
+        self.num_events = self.dog.shape[0]
         self.psds = None
+
+
+    def trim_ends(self, minutes=1):
+        self.dog = self.dog[
+            (self.dog.t_end <= self.end - datetime.timedelta(minutes=minutes)) & \
+            (self.dog.t_start >= self.start + datetime.timedelta(minutes=minutes))
+        ]
 
 
     def calc_PSDs(self):
@@ -247,8 +261,16 @@ class SessionAnalysis(DataBase):
         self.owner = self.get_table_as_dataframe('owner_events')
 
 
+    def get_event_audio(self, event_id):
+        return self.dog.loc[event_id, 'audio']
+
+
+    def get_owner_event(self, event_id):
+        raise NotImplementedError("FIXME Not implemented yet")
+
+
     def play(self, event_id):
-        sd.play(self.dog.loc[event_id, 'audio'], blocking=True)
+        sd.play(self.get_event_audio(event_id), blocking=True)
 
 
     def play_many(self, start=None, stop=None):

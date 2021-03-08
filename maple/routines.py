@@ -10,9 +10,10 @@ from maple.data import DataBase, SessionAnalysis
 from maple.owner_recordings import OwnerRecordings
 
 import time
-import datetime
+import numpy as np
 import pandas as pd
 import argparse
+import datetime
 import sounddevice as sd
 
 import plotly.express as px
@@ -97,6 +98,7 @@ class MonitorDog(events.Monitor):
             'pressure_sum': pressure*t_in_sec,
             'class': None, # TODO
             'audio': utils.convert_array_to_blob(data),
+            'train_label': None,
         }
 
         self.events = self.events.append(event, ignore_index=True)
@@ -409,6 +411,162 @@ class RecordOwnerVoice(events.Monitor):
         self.recs.write(self.name, self.recording, maple.RATE, sentiment)
         print('Stored voice input...')
         print(f"You now have {self.recs.num} recordings.")
+        self.state = 'preview'
+
+
+class LabelAudio(object):
+    """Label audio from Audio"""
+
+    def __init__(self, args=argparse.Namespace()):
+        self.menu = {
+            'home': {
+                'msg': 'Press [s] to start, Press [q] to quit. Response: ',
+                'function': self.menu_handle,
+            },
+            'preview': {
+                'msg': 'Use clip? [y]es, [n]o, [r]epeat, [q]uit. Response: ',
+                'function': self.preview_handle,
+            },
+            'label': {
+                'msg': '[0] none, [1] whine, [2] howl, [3] bark, [4] play, [5] cage, [6] door, [r]epeat, [R]epeat full, [q]uit. Reponse: ',
+                'function': self.label_handle,
+            },
+        }
+
         self.state = 'home'
+        self.subevent_time = 0.25 # in seconds
+
+        self.label_data_path = Path(args.label_data)
+        if self.label_data_path.exists():
+            self.label_data = pd.read_csv(self.label_data_path, sep='\t')
+        else:
+            cols = [
+                'session_id',
+                'event_id',
+                'subevent_id',
+                't_start',
+                't_end',
+                'label',
+            ]
+            self.label_data = pd.DataFrame({}, columns=cols)
+
+        print(f'You have {self.label_data.shape[0]} labelled data')
+
+        if args.session_paths is None:
+            session_paths = sorted(maple.db_dir.glob('*/events.db'))
+        else:
+            session_paths = sorted([Path(x.strip()) for x in open(args.session_paths).readlines()])
+
+        events = []
+        for session_path in session_paths:
+            session_db = data.SessionAnalysis(path=session_path)
+            session_db.dog['session_id'] = session_db.meta[session_db.meta['key'] == 'id'].iloc[0]['value']
+            events.append(session_db.dog)
+            session_db.disconnect()
+
+        self.events = pd.concat(events)
+        self.filter()
+
+
+    def run(self):
+        while True:
+            self.menu[self.state]['function'](input(self.menu[self.state]['msg']))
+            print()
+
+            if self.state == 'done':
+                print('Bye.')
+                break
+
+
+    def menu_handle(self, response):
+        if response == 's':
+            self.event = self.sample_event()
+            self.play_event(self.event)
+            self.state = 'preview'
+        elif response == 'q':
+            self.state = 'done'
+        else:
+            print('invalid input')
+
+
+    def preview_handle(self, response):
+        if response == 'y':
+            self.set_subevents(self.event)
+            self.play_subevent(self.curr_subevent)
+            self.state = 'label'
+        elif response == 'n':
+            self.event = self.sample_event()
+            self.play_event(self.event)
+        elif response == 'r':
+            self.play_event(self.event)
+        elif response == 'q':
+            self.state = 'done'
+        else:
+            print('invalid input')
+
+
+    def label_handle(self, response):
+        if response == 'r':
+            self.play_subevent(self.curr_subevent)
+        elif response == 'R':
+            self.play_event(self.event)
+        elif response in [str(x) for x in range(7)]:
+            self.append_label(response)
+            if not self.increment_subevent():
+                print('Finished event')
+                self.event = self.sample_event()
+                self.play_event(self.event)
+                self.state = 'preview'
+            self.play_subevent(self.curr_subevent)
+        elif response == 'q':
+            self.state = 'done'
+        else:
+            print('invalid input')
+
+
+    def sample_event(self):
+        return self.events.sample().iloc[0]
+
+
+    def append_label(self, response):
+        pass
+
+
+    def increment_subevent(self):
+        if self.curr_subevent_id == self.num_subevents - 1:
+            return False
+
+        self.curr_subevent_id += 1
+        self.curr_subevent = self.subevents[self.curr_subevent_id]
+
+        return True
+
+
+    def set_subevents(self, event):
+        self.subevents = []
+        self.num_subevents = int(event.t_len // self.subevent_time)
+        subevent_len = int(self.subevent_time * maple.RATE)
+
+        event_audio = event['audio']
+        for i in range(self.num_subevents):
+            self.subevents.append(event_audio[i*subevent_len: (i+1)*subevent_len])
+
+        self.curr_subevent = self.subevents[0]
+        self.curr_subevent_id = 0
+
+
+    def play_event(self, event):
+        audio = np.copy(event['audio'])
+        audio *= 10000 / np.max(audio)
+        audio = audio.astype(maple.ARRAY_DTYPE)
+        sd.play(audio, blocking=True)
+
+
+    def play_subevent(self, subevent):
+        sd.play(subevent, blocking=True)
+
+
+    def filter(self, max_t_len=10):
+        self.events = self.events[self.events['t_len'] <= max_t_len]
 
 
