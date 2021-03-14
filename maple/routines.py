@@ -418,6 +418,16 @@ class LabelAudio(object):
     """Label audio from Audio"""
 
     def __init__(self, args=argparse.Namespace()):
+        self.labels = {
+            0: 'none',
+            1: 'whine',
+            2: 'howl',
+            3: 'bark',
+            4: 'play',
+            5: 'scratch_cage',
+            6: 'scratch_door',
+        }
+
         self.menu = {
             'home': {
                 'msg': 'Press [s] to start, Press [q] to quit. Response: ',
@@ -428,43 +438,50 @@ class LabelAudio(object):
                 'function': self.preview_handle,
             },
             'label': {
-                'msg': '[0] none, [1] whine, [2] howl, [3] bark, [4] play, [5] cage, [6] door, [r]epeat, [R]epeat full, [q]uit. Reponse: ',
+                'msg': '[0] none, [1] whine, [2] howl, [3] bark, [4] play, [5] cage, [6] door, [r]epeat, [R]epeat full, [q]uit. Reponse: '.\
+                    format(', '.join(['[' + str(key) + '] ' + val for key, val in self.labels.items()])),
                 'function': self.label_handle,
             },
         }
 
+        if args.label_data is None:
+            raise Exception("You must supply --label-data")
+
         self.state = 'home'
         self.subevent_time = 0.25 # in seconds
 
+        self.cols = [
+            'session_id',
+            'event_id',
+            'subevent_id',
+            't_start',
+            't_end',
+            'label',
+            'date_labeled',
+        ]
+
         self.label_data_path = Path(args.label_data)
         if self.label_data_path.exists():
-            self.label_data = pd.read_csv(self.label_data_path, sep='\t')
+            self.data = pd.read_csv(self.label_data_path, sep='\t')
         else:
-            cols = [
-                'session_id',
-                'event_id',
-                'subevent_id',
-                't_start',
-                't_end',
-                'label',
-            ]
-            self.label_data = pd.DataFrame({}, columns=cols)
+            self.data = pd.DataFrame({}, columns=self.cols)
 
-        print(f'You have {self.label_data.shape[0]} labelled data')
+        print(f'You have {self.data.shape[0]} labelled data')
 
         if args.session_paths is None:
             session_paths = sorted(maple.db_dir.glob('*/events.db'))
         else:
             session_paths = sorted([Path(x.strip()) for x in open(args.session_paths).readlines()])
 
-        events = []
+        self.sessions = {}
         for session_path in session_paths:
+            print(f'Loading session path {session_path}')
             session_db = data.SessionAnalysis(path=session_path)
-            session_db.dog['session_id'] = session_db.meta[session_db.meta['key'] == 'id'].iloc[0]['value']
-            events.append(session_db.dog)
+            session_id = session_db.meta[session_db.meta['key'] == 'id'].iloc[0]['value']
+            session_db.dog['session_id'] = session_id
+            self.sessions[session_id] = session_db.dog
             session_db.disconnect()
 
-        self.events = pd.concat(events)
         self.filter()
 
 
@@ -474,7 +491,8 @@ class LabelAudio(object):
             print()
 
             if self.state == 'done':
-                print('Bye.')
+                self.save_data()
+                print('Any new data has been saved. Bye.')
                 break
 
 
@@ -510,10 +528,11 @@ class LabelAudio(object):
             self.play_subevent(self.curr_subevent)
         elif response == 'R':
             self.play_event(self.event)
-        elif response in [str(x) for x in range(7)]:
-            self.append_label(response)
+        elif response in [str(x) for x in self.labels.keys()]:
+            self.append(response)
             if not self.increment_subevent():
                 print('Finished event')
+                self.cache_event_labels()
                 self.event = self.sample_event()
                 self.play_event(self.event)
                 self.state = 'preview'
@@ -525,11 +544,28 @@ class LabelAudio(object):
 
 
     def sample_event(self):
-        return self.events.sample().iloc[0]
+        self.event_data = {x: [] for x in self.cols}
+        session_id = np.random.choice(list(self.sessions.keys()))
+        return self.sessions[session_id].sample().iloc[0]
 
 
-    def append_label(self, response):
-        pass
+    def cache_event_labels(self):
+        self.event_data = pd.DataFrame(self.event_data)
+        self.data = pd.concat([self.data, self.event_data], ignore_index=True)
+
+
+    def save_data(self):
+        self.data.to_csv(self.label_data_path, sep='\t', index=False)
+
+
+    def append(self, response):
+        self.event_data['session_id'].append(self.event['session_id'])
+        self.event_data['event_id'].append(self.event['event_id'])
+        self.event_data['subevent_id'].append(self.curr_subevent_id)
+        self.event_data['t_start'].append(self.curr_subevent_id * self.subevent_time)
+        self.event_data['t_end'].append((self.curr_subevent_id + 1) * self.subevent_time)
+        self.event_data['label'].append(self.labels[int(response)])
+        self.event_data['date_added'].append(datetime.datetime.now())
 
 
     def increment_subevent(self):
@@ -556,9 +592,11 @@ class LabelAudio(object):
 
 
     def play_event(self, event):
-        audio = np.copy(event['audio'])
+        # Normalize volumes so barks aren't too loud, and grrrs aren't too soft
+        audio = np.copy(event['audio']).astype(float)
         audio *= 10000 / np.max(audio)
         audio = audio.astype(maple.ARRAY_DTYPE)
+
         sd.play(audio, blocking=True)
 
 
@@ -567,6 +605,7 @@ class LabelAudio(object):
 
 
     def filter(self, max_t_len=10):
-        self.events = self.events[self.events['t_len'] <= max_t_len]
+        for events in self.sessions.values():
+            events = events[events['t_len'] <= max_t_len]
 
 

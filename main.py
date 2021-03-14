@@ -26,7 +26,7 @@ if __name__ == '__main__':
 
     LABEL = ap.add_argument_group('label', 'arguments for `record` mode')
     LABEL.add_argument('-S', '--session-paths', default=None, help='Path to list of session paths to label data from')
-    LABEL.add_argument('-T', '--label-data', required=True, help='Filepath where data is stored. Will be created if it doesn\'t exist')
+    LABEL.add_argument('-T', '--label-data', required=None, help='Filepath where data is stored. Will be created if it doesn\'t exist')
 
     args = ap.parse_args()
 
