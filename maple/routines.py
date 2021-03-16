@@ -15,13 +15,14 @@ import pandas as pd
 import argparse
 import datetime
 import sounddevice as sd
-
 import plotly.express as px
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-from tabulate import tabulate
 
+from scipy import signal
 from pathlib import Path
+from tabulate import tabulate
+from plotly.subplots import make_subplots
+from sklearn.ensemble import RandomForestClassifier
 
 
 class MonitorDog(events.Monitor):
@@ -477,6 +478,10 @@ class LabelAudio(object):
         for session_path in session_paths:
             print(f'Loading session path {session_path}')
             session_db = data.SessionAnalysis(path=session_path)
+
+            if session_db.dog.empty:
+                continue
+
             session_id = session_db.meta[session_db.meta['key'] == 'id'].iloc[0]['value']
             session_db.dog['session_id'] = session_id
             self.sessions[session_id] = session_db.dog
@@ -536,6 +541,7 @@ class LabelAudio(object):
                 self.event = self.sample_event()
                 self.play_event(self.event)
                 self.state = 'preview'
+                return
             self.play_subevent(self.curr_subevent)
         elif response == 'q':
             self.state = 'done'
@@ -545,8 +551,18 @@ class LabelAudio(object):
 
     def sample_event(self):
         self.event_data = {x: [] for x in self.cols}
-        session_id = np.random.choice(list(self.sessions.keys()))
-        return self.sessions[session_id].sample().iloc[0]
+        while True:
+            session_id = np.random.choice(list(self.sessions.keys()))
+            event = self.sessions[session_id].sample().iloc[0]
+
+            for _, row in self.data.iterrows():
+                if row['session_id'] == session_id and row['event_id'] == event['event_id']:
+                    print('Event already labelled')
+                    break
+            else:
+                break
+
+        return event
 
 
     def cache_event_labels(self):
@@ -565,7 +581,7 @@ class LabelAudio(object):
         self.event_data['t_start'].append(self.curr_subevent_id * self.subevent_time)
         self.event_data['t_end'].append((self.curr_subevent_id + 1) * self.subevent_time)
         self.event_data['label'].append(self.labels[int(response)])
-        self.event_data['date_added'].append(datetime.datetime.now())
+        self.event_data['date_labeled'].append(datetime.datetime.now())
 
 
     def increment_subevent(self):
@@ -601,11 +617,177 @@ class LabelAudio(object):
 
 
     def play_subevent(self, subevent):
-        sd.play(subevent, blocking=True)
+        # Normalize volumes so barks aren't too loud, and grrrs aren't too soft
+        audio = np.copy(subevent).astype(float)
+        audio *= 10000 / np.max(audio)
+        audio = audio.astype(maple.ARRAY_DTYPE)
+
+        sd.play(audio, blocking=True)
 
 
     def filter(self, max_t_len=10):
         for events in self.sessions.values():
             events = events[events['t_len'] <= max_t_len]
+
+
+class Train(object):
+    """Train a model based off label data"""
+
+    def __init__(self, args=argparse.Namespace()):
+        self.labels = {
+            0: 'none',
+            1: 'whine',
+            2: 'howl',
+            3: 'bark',
+            4: 'play',
+            5: 'scratch_cage',
+            6: 'scratch_door',
+        }
+        self.label_dict = {v: k for k, v in self.labels.items()}
+
+        if args.label_data is None:
+            raise Exception("Must provide --label-data in order to train!")
+
+        self.label_data_path = Path(args.label_data)
+        self.label_data = pd.read_csv(self.label_data_path, sep='\t')
+
+        self.subevent_time = self.infer_subevent_time()
+
+        self.dbs = {}
+        session_ids = self.label_data['session_id'].unique()
+        for session_id in session_ids:
+            self.dbs[session_id] = data.SessionAnalysis(name=session_id)
+
+        self.run_train()
+
+
+    def run_train(self):
+        self.prep_data(spectrogram=True)
+        self.fit_data()
+
+
+    def infer_subevent_time(self):
+        """Take most common subevent_time"""
+        return (self.label_data['t_end'] - self.label_data['t_start']).value_counts().index[0]
+
+
+    def get_event_audio(self, session_id, event_id):
+        return self.dbs[session_id].get_event_audio(event_id)
+
+
+    def get_subevent_audio(self, session_id, event_id, subevent_id):
+        event_audio = self.get_event_audio(session_id, event_id)
+
+        subevent_len = int(self.subevent_time * maple.RATE)
+        subevent_audio = event_audio[subevent_id * subevent_len: (subevent_id + 1) * subevent_len]
+
+        return subevent_audio
+
+
+    def get_subevent_spectrogram(self, session_id, event_id, subevent_id, log=True, flatten=True):
+        subevent_audio = self.get_subevent_audio(session_id, event_id, subevent_id)
+        return self.get_spectrogram(subevent_audio, log=True, flatten=True)
+
+
+    def get_spectrogram(self, audio, log=True, flatten=True):
+        f, t, Sxx = signal.spectrogram(audio, maple.RATE)
+
+        output = Sxx
+        if log:
+            output = np.log2(output)
+        if flatten:
+            output = output.flatten()
+
+        return output
+
+
+    def get_audio_length(self):
+        data = self.label_data.iloc[0]
+        return len(self.get_subevent_audio(
+            session_id = data['session_id'],
+            event_id = data['event_id'],
+            subevent_id = data['subevent_id'],
+        ))
+
+
+    def get_spectrogram_length(self):
+        data = self.label_data.iloc[0]
+        return self.get_subevent_spectrogram(
+            session_id = data['session_id'],
+            event_id = data['event_id'],
+            subevent_id = data['subevent_id'],
+            flatten = True,
+        ).shape[0]
+
+
+    def get_spectrogram_shape(self):
+        data = self.label_data.iloc[0]
+        return self.get_subevent_spectrogram(
+            session_id = data['session_id'],
+            event_id = data['event_id'],
+            subevent_id = data['subevent_id'],
+            flatten = False,
+        ).shape
+
+
+    def prep_data(self, spectrogram=True, train_frac=0.8):
+        """Sets training and validation datasets, self.X_train, self.y_train, self.X_validate, self.y_validate
+
+        Parameters
+        ==========
+        spectogram : bool, True
+            If False, the audio is used as training data instead of corresponding spectrogram
+        """
+
+        a = self.label_data.shape[0]
+        if spectrogram:
+            b = self.get_spectrogram_length()
+        else:
+            b = self.get_audio_length()
+
+        X = np.zeros((a, b))
+        y = np.zeros(a).astype(int)
+
+        shuffled_label_data = self.label_data.sample(frac=1).reset_index(drop=True)
+
+        for i, data in shuffled_label_data.iterrows():
+            label = self.label_dict[data['label']]
+            y[i] = label
+
+            if spectrogram:
+                X[i, :] = self.get_subevent_spectrogram(
+                    session_id = data['session_id'],
+                    event_id = data['event_id'],
+                    subevent_id = data['subevent_id'],
+                    log = False,
+                    flatten = True,
+                )
+            else:
+                X[i, :] = self.get_subevent_audio(
+                    session_id = data['session_id'],
+                    event_id = data['event_id'],
+                    subevent_id = data['subevent_id'],
+                )
+
+        self.X_train = X[:int(a*train_frac), :]
+        self.y_train = y[:int(a*train_frac)]
+
+        self.X_validate = X[int(a*train_frac):, :]
+        self.y_validate = y[int(a*train_frac):]
+
+
+    def fit_data(self, *args, **kwargs):
+        clf = RandomForestClassifier(*args, **kwargs)
+
+        clf.fit(self.X_train, self.y_train)
+        prediction = clf.predict(self.X_validate)
+        correct = (prediction == self.y_validate)
+
+        import ipdb; ipdb.set_trace()
+        print(correct.sum() / len(correct))
+
+
+
+
 
 
