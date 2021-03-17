@@ -83,6 +83,7 @@ class LabelAudio(object):
             if session_db.dog.empty:
                 continue
 
+            session_db.trim_ends(minutes=1)
             session_id = session_db.meta[session_db.meta['key'] == 'id'].iloc[0]['value']
             session_db.dog['session_id'] = session_id
             self.sessions[session_id] = session_db.dog
@@ -421,7 +422,7 @@ class Classifier(object):
 
 
 class Classify(Classifier):
-    """Update the 'class' column of the 'dog' table in a list of sessions"""
+    """Update the 'class' column of the 'events' table in a list of sessions"""
 
     def __init__(self, args):
         if args.model_dir is None:

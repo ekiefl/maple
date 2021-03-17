@@ -215,8 +215,6 @@ class SessionAnalysis(DataBase):
         self.end = datetime.datetime.strptime(self.meta.loc[self.meta['key'] == 'end', 'value'].iloc[0], '%Y-%m-%d %H:%M:%S.%f')
         self.duration = (self.end - self.start).total_seconds()
 
-        self.trim_ends(minutes=1)
-
         self.num_events = self.dog.shape[0]
         self.psds = None
 
