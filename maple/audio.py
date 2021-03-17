@@ -36,6 +36,19 @@ def bandpass(data, lowcut, highcut):
     return signal.sosfilt(sos, data).astype(data.dtype)
 
 
+def get_spectrogram(audio, fs=None, log=False, flatten=True):
+    if fs is None:
+        fs = maple.RATE
+
+    f, t, Sxx = signal.spectrogram(audio, fs)
+
+    output = Sxx
+    if log:
+        output = np.log2(output)
+    if flatten:
+        output = output.flatten()
+
+    return output
 
 
 

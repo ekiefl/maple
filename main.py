@@ -3,13 +3,14 @@
 import maple
 import maple.data as data
 import maple.routines as routines
+import maple.classifier as classifier
 
 import argparse
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description="Open up `config` to change run parameters")
 
-    ap.add_argument('mode', choices=('run', 'record', 'analyze', 'label', 'train'), help="What mode do you want to run in?")
+    ap.add_argument('mode', choices=('run', 'record', 'analyze', 'label', 'train', 'classify'), help="What mode do you want to run in?")
     ap.add_argument('-t', '--temp', action='store_true', help='Use to search for and save DB sessions in data/temp')
     ap.add_argument('-q', '--quiet', action='store_true', help='Be quieter')
     ap.add_argument('-r', '--randomize', action='store_true', help='Randomize whether to praise and scold')
@@ -27,6 +28,7 @@ if __name__ == '__main__':
     LABEL = ap.add_argument_group('label/train', 'arguments for `label/train` mode')
     LABEL.add_argument('-S', '--session-paths', default=None, help='Path to list of session paths to label data from')
     LABEL.add_argument('-T', '--label-data', required=None, help='Filepath where data is stored. Will be created if it doesn\'t exist')
+    LABEL.add_argument('-m', '--model-dir', required=None, help='A model will be stored in this directory. Directory should not exist beforehand.')
 
     args = ap.parse_args()
 
@@ -42,6 +44,8 @@ if __name__ == '__main__':
     elif args.mode == 'record':
         routines.RecordOwnerVoice(args).run()
     elif args.mode == 'label':
-        routines.LabelAudio(args).run()
+        classifier.LabelAudio(args).run()
     elif args.mode == 'train':
-        routines.Train(args).run()
+        classifier.Train(args).run()
+    elif args.mode == 'classify':
+        classifier.Classify(args).run()

@@ -124,13 +124,13 @@ class DataBase(object):
         return results_df[columns_of_interest]
 
 
-    def insert_rows_from_dataframe(self, table_name, df):
+    def insert_rows_from_dataframe(self, table_name, df, replace=False):
         df = df[self.get_table_structure(table_name)]
 
         df.to_sql(
             table_name,
             self.conn,
-            if_exists='append',
+            if_exists='replace' if replace else 'append',
             dtype=self.get_table_columns_and_types(table_name),
             index=False
         )
