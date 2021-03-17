@@ -221,8 +221,8 @@ class Analysis(object):
 
 
     def histogram(self, session):
-        dog_hover_cols = ['t_start', 'event_id', 't_len', 'energy', 'power', 'pressure_mean', 'pressure_sum']
-        owner_hover_cols = ['t_start', 'response_to', 'name', 'reason', 'sentiment']
+        dog_hover_cols = ['t_start', 'event_id', 't_len', 'energy', 'power', 'pressure_mean', 'pressure_sum', 'class']
+        owner_hover_cols = ['t_start', 'response_to', 'name', 'reason', 'sentiment', 'action']
 
         color='#ADB9CB'
         color2='#ED028C' # scold
@@ -256,6 +256,9 @@ class Analysis(object):
         n_owner_praise = session.owner[session.owner['sentiment'] == 'good'].shape[0]
         n_owner_scold = session.owner[session.owner['sentiment'] == 'bad'].shape[0]
 
+        scold = bool(int(dict(zip(session.meta.key, session.meta.value))['scold']))
+        praise = bool(int(dict(zip(session.meta.key, session.meta.value))['praise']))
+
         data = session.dog["t_start"].append(session.owner.loc[session.owner['sentiment']=='bad', 't_start'])
         data = data.append(session.owner.loc[session.owner['sentiment']=='good', 't_start'])
 
@@ -267,10 +270,11 @@ class Analysis(object):
             y = ['Event'] * n_dog_events + ['Event'] * n_owner_events,
             marker = dict(
                 color = [color] * n_dog_events + [color2] * n_owner_scold + [color3] * n_owner_praise,
+                opacity = [1] * n_dog_events + [1 if scold else 0.3] * n_owner_scold + [1 if praise else 0.3] * n_owner_praise,
                 symbol = "line-ns-open",
                 size = p.tolist() + [20] * n_owner_events,
                 line = dict(
-                    width = [1] * n_dog_events + [2] * n_owner_events,
+                    width = [1] * n_dog_events + [2 if scold else 1.3] * n_owner_scold + [2 if scold else 1.3] * n_owner_praise,
                 )
             ),
             showlegend = False,
