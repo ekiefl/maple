@@ -221,21 +221,8 @@ class Analysis(object):
 
 
     def histogram(self, session):
-        dog_hover_cols = ['t_start', 'event_id', 't_len', 'energy', 'power', 'pressure_mean', 'pressure_sum', 'class']
-        owner_hover_cols = ['t_start', 'response_to', 'name', 'reason', 'sentiment', 'action']
 
         color='#ADB9CB'
-        color2='#ED028C' # scold
-        color3='#01C702' # praise
-
-        get_dog_event_string = lambda row: tabulate(pd.DataFrame(row[row.index.isin(dog_hover_cols)]), tablefmt='fancy_grid').replace('\n', '<br>')
-        get_owner_event_string = lambda row: tabulate(pd.DataFrame(row[row.index.isin(owner_hover_cols)]), tablefmt='fancy_grid').replace('\n', '<br>')
-
-        hover_data_dog = session.dog.apply(get_dog_event_string, axis=1).tolist()
-        hover_data_owner = session.owner.apply(get_owner_event_string, axis=1).tolist()
-
-        ################################################################
-
         histogram = go.Histogram(
             x=session.dog["t_start"],
             y=session.dog["pressure_sum"],
@@ -251,6 +238,19 @@ class Analysis(object):
         )
 
         ################################################################
+
+        dog_hover_cols = ['t_start', 'event_id', 't_len', 'energy', 'power', 'pressure_mean', 'pressure_sum', 'class']
+        owner_hover_cols = ['t_start', 'response_to', 'name', 'reason', 'sentiment', 'action']
+
+        color2='#ED028C' # scold
+        color3='#01C702' # praise
+
+        get_dog_event_string = lambda row: tabulate(pd.DataFrame(row[row.index.isin(dog_hover_cols)]), tablefmt='fancy_grid').replace('\n', '<br>')
+        get_owner_event_string = lambda row: tabulate(pd.DataFrame(row[row.index.isin(owner_hover_cols)]), tablefmt='fancy_grid').replace('\n', '<br>')
+
+        hover_data_dog = session.dog.apply(get_dog_event_string, axis=1).tolist()
+        hover_data_scold = session.owner[session.owner['sentiment']=='bad'].apply(get_owner_event_string, axis=1).tolist()
+        hover_data_praise = session.owner[session.owner['sentiment']=='good'].apply(get_owner_event_string, axis=1).tolist()
 
         p = session.dog['pressure_sum']
         p = 50 * (p - p.min()) / (p.max() - p.min()) + 2.5
@@ -282,7 +282,7 @@ class Analysis(object):
                 )
             ),
             showlegend = False,
-            text = hover_data_dog + hover_data_owner,
+            text = hover_data_dog + hover_data_scold + hover_data_praise,
             hoverinfo = 'text',
             hoverlabel = dict(
                 font = dict(
@@ -296,7 +296,7 @@ class Analysis(object):
         ################################################################
 
         class_colors = {
-            'none': '#444444',
+            'none': '#DDDDDD',
             'whine': '#165BAA',
             'howl': '#A155B9',
             'bark': '#AE2D68',
@@ -309,13 +309,42 @@ class Analysis(object):
             groupby([pd.Grouper(key='t_start', freq='1min'), 'class'])\
             ['event_id'].\
             count().\
+            reset_index().\
+            rename(columns={'event_id': 'count'})
+        # make the start of the bin match the start of the first event
+        binned_class_counts['t_start'] += session.dog.iloc[0]['t_start'] - binned_class_counts.iloc[0]['t_start'] \
+            - datetime.timedelta(seconds=30)
+
+        # bins with no data don't exist, and it makes the the plot look bad. Here I create bins with
+        # 'none' class counts
+        empty_bins = {
+            't_start': [],
+            'class': [],
+            'count': [],
+        }
+
+        curr_time, end_time = binned_class_counts.iloc[0]['t_start'], binned_class_counts.iloc[-1]['t_start']
+        while True:
+            if curr_time > end_time:
+                break
+            if (curr_time == binned_class_counts['t_start']).sum() == 0:
+                empty_bins['t_start'].append(curr_time)
+                empty_bins['class'].append('none')
+                empty_bins['count'].append(1)
+            curr_time += datetime.timedelta(minutes=1)
+
+        binned_class_counts = pd.concat([binned_class_counts, pd.DataFrame(empty_bins)], ignore_index=True).\
+            sort_values(by='t_start').\
+            reset_index(drop=True).\
+            set_index(['t_start', 'class']).\
             unstack().\
             fillna(0).\
-            astype(int)
+            astype(int).\
+            droplevel(0, axis=1)
+
         for c in class_colors:
             if c not in binned_class_counts.columns:
                 binned_class_counts[c] = 0
-        binned_class_counts.index += session.dog.iloc[0]['t_start'] - binned_class_counts.index[0]
         binned_class_counts = binned_class_counts[maple.classifier.labels.values()]
 
         class_plots = []
@@ -333,6 +362,7 @@ class Analysis(object):
 
         ################################################################
 
+        session_id = session.meta[session.meta['key'] == 'id'].iloc[0]['value']
         fig = go.Figure()
         fig = make_subplots(rows=3, cols=1, row_width=[0.2, 0.4, 0.4], shared_xaxes=True)
         fig.add_trace(dog_rug, 3, 1)
@@ -341,12 +371,13 @@ class Analysis(object):
             fig.add_trace(class_plot, 1, 1)
         fig.update_layout(
             template='none',
-            title="Barking distribution",
+            title=f"Session {session_id}",
             title_font_family="rockwell",
             font_family="rockwell",
-            yaxis_title="Sound pressure [AU]",
         )
         fig.update_xaxes(matches='x')
+        fig['layout']['yaxis']['title']='Noise composition'
+        fig['layout']['yaxis2']['title']='Noise amplitude'
         fig.show()
 
         self.save_fig(fig, session.db_path.parent / 'histogram.html')

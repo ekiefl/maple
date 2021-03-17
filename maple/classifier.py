@@ -182,6 +182,8 @@ class LabelAudio(object):
 
 
     def save_data(self):
+        self.data['event_id'] = self.data['event_id'].astype(int)
+        self.data['subevent_id'] = self.data['subevent_id'].astype(int)
         self.data.to_csv(self.label_data_path, sep='\t', index=False)
 
 
