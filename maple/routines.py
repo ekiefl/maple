@@ -234,6 +234,8 @@ class Analysis(object):
         hover_data_dog = session.dog.apply(get_dog_event_string, axis=1).tolist()
         hover_data_owner = session.owner.apply(get_owner_event_string, axis=1).tolist()
 
+        ################################################################
+
         histogram = go.Histogram(
             x=session.dog["t_start"],
             y=session.dog["pressure_sum"],
@@ -247,6 +249,8 @@ class Analysis(object):
             marker={'color': color},
             showlegend = False,
         )
+
+        ################################################################
 
         p = session.dog['pressure_sum']
         p = 50 * (p - p.min()) / (p.max() - p.min()) + 2.5
@@ -289,10 +293,52 @@ class Analysis(object):
             ),
         )
 
+        ################################################################
+
+        class_colors = {
+            'none': '#444444',
+            'whine': '#165BAA',
+            'howl': '#A155B9',
+            'bark': '#AE2D68',
+            'play': '#B0D8A4',
+            'scratch_cage': '#F2C85B',
+            'scratch_door': '#F2C85B',
+        }
+
+        binned_class_counts = session.dog.\
+            groupby([pd.Grouper(key='t_start', freq='1min'), 'class'])\
+            ['event_id'].\
+            count().\
+            unstack().\
+            fillna(0).\
+            astype(int)
+        for c in class_colors:
+            if c not in binned_class_counts.columns:
+                binned_class_counts[c] = 0
+        binned_class_counts.index += session.dog.iloc[0]['t_start'] - binned_class_counts.index[0]
+        binned_class_counts = binned_class_counts[maple.classifier.labels.values()]
+
+        class_plots = []
+        for c in binned_class_counts.columns:
+            class_plots.append(go.Scatter(
+                x=binned_class_counts.index.tolist(),
+                y=binned_class_counts[c].values,
+                name=c,
+                mode='lines',
+                line=dict(width=0.5, color=class_colors[c]),
+                stackgroup='one',
+                groupnorm='percent' # sets the normalization for the sum of the stackgroup
+            ))
+
+
+        ################################################################
+
         fig = go.Figure()
-        fig = make_subplots(rows=2, cols=1, row_width=[0.2, 0.8], shared_xaxes=True)
-        fig.add_trace(dog_rug, 2, 1)
-        fig.add_trace(histogram, 1, 1)
+        fig = make_subplots(rows=3, cols=1, row_width=[0.2, 0.4, 0.4], shared_xaxes=True)
+        fig.add_trace(dog_rug, 3, 1)
+        fig.add_trace(histogram, 2, 1)
+        for class_plot in class_plots:
+            fig.add_trace(class_plot, 1, 1)
         fig.update_layout(
             template='none',
             title="Barking distribution",

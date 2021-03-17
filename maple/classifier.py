@@ -40,7 +40,7 @@ class LabelAudio(object):
                 'function': self.preview_handle,
             },
             'label': {
-                'msg': '[0] none, [1] whine, [2] howl, [3] bark, [4] play, [5] cage, [6] door, [r]epeat, [R]epeat full, [q]uit. Reponse: '.\
+                'msg': '[0] none, [1] whine, [2] howl, [3] bark, [4] play, [5] cage, [6] door, [r]epeat, [R]epeat full, [s] to skip, [q]uit. Reponse: '.\
                     format(', '.join(['[' + str(key) + '] ' + val for key, val in labels.items()])),
                 'function': self.label_handle,
             },
@@ -79,11 +79,11 @@ class LabelAudio(object):
         for session_path in session_paths:
             print(f'Loading session path {session_path}')
             session_db = data.SessionAnalysis(path=session_path)
+            session_db.trim_ends(minutes=1)
 
             if session_db.dog.empty:
                 continue
 
-            session_db.trim_ends(minutes=1)
             session_id = session_db.meta[session_db.meta['key'] == 'id'].iloc[0]['value']
             session_db.dog['session_id'] = session_id
             self.sessions[session_id] = session_db.dog
@@ -135,6 +135,15 @@ class LabelAudio(object):
             self.play_subevent(self.curr_subevent)
         elif response == 'R':
             self.play_event(self.event)
+        elif response == 's':
+            if not self.increment_subevent():
+                print('Finished event')
+                self.cache_event_labels()
+                self.event = self.sample_event()
+                self.play_event(self.event)
+                self.state = 'preview'
+                return
+            self.play_subevent(self.curr_subevent)
         elif response in [str(x) for x in labels.keys()]:
             self.append(response)
             if not self.increment_subevent():
