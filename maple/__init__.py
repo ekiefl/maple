@@ -7,6 +7,10 @@ import configparser
 
 from pathlib import Path
 
+import matplotlib
+matplotlib.rcParams['font.family'] = "Courier New"
+matplotlib.rcParams['font.size'] = "16"
+
 CHUNK = 2**11
 RATE = 44100
 ARRAY_DTYPE = np.int16
