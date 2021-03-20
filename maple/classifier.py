@@ -182,6 +182,8 @@ class LabelAudio(object):
 
 
     def save_data(self):
+        # FIXME
+        return
         self.data['event_id'] = self.data['event_id'].astype(int)
         self.data['subevent_id'] = self.data['subevent_id'].astype(int)
         self.data.to_csv(self.label_data_path, sep='\t', index=False)
@@ -244,9 +246,18 @@ class LabelAudio(object):
 
 
 class Train(object):
-    """Train a model based off label data"""
 
     def __init__(self, args=argparse.Namespace()):
+        """Train a model based off label data
+
+        Parameters
+        ==========
+        args : argparse.Namespace
+            An `argparse.Namespace` object with `label_data` and `model_dir` paths. `label_data` is
+            a string pointing to the label data filepath to be used for training. `model_dir` is a string
+            pointing to a directory where the model will be stored. The directory must not exist.
+        """
+
         self.label_dict = {v: k for k, v in labels.items()}
 
         if args.label_data is None:
@@ -273,6 +284,11 @@ class Train(object):
 
 
     def run(self):
+        """Run the training procedure
+
+        This method glues the procedure together.
+        """
+
         self.prep_data(spectrogram=True)
 
         self.fit_data(
@@ -285,20 +301,54 @@ class Train(object):
 
 
     def disconnect_dbs(self):
+        """Disconnect the SQL connections for all sessions databases"""
         for db in self.dbs.values():
             db.disconnect()
 
 
     def infer_subevent_time(self):
-        """Take most common subevent_time"""
+        """Returns the subevent time (chunk size) used for the labeled data"""
         return (self.label_data['t_end'] - self.label_data['t_start']).value_counts().index[0]
 
 
     def get_event_audio(self, session_id, event_id):
+        """Returns the audio data for an event
+
+        Parameters
+        ==========
+        session_id : str
+            The ID of the session that the event is in
+        event_id : int
+            The ID of the event
+
+
+        Returns
+        =======
+        output : numpy array, dtype = np.int16
+            The audio data.
+        """
+
         return self.dbs[session_id].get_event_audio(event_id)
 
 
     def get_subevent_audio(self, session_id, event_id, subevent_id):
+        """Returns the audio data for a subevent (chunk)
+
+        Parameters
+        ==========
+        session_id : str
+            The ID of the session that the event is in
+        event_id : int
+            The ID of the event
+        subevent_id : int
+            The ID of the subevent
+
+        Returns
+        =======
+        output : numpy array, dtype = np.int16
+            The audio data
+        """
+
         event_audio = self.get_event_audio(session_id, event_id)
 
         subevent_len = int(self.subevent_time * maple.RATE)
@@ -308,11 +358,32 @@ class Train(object):
 
 
     def get_subevent_spectrogram(self, session_id, event_id, subevent_id, flatten=True):
+        """Calculates the spectrogram of a subevent
+
+        Parameters
+        ==========
+        session_id : str
+            The ID of the session that the event is in
+        event_id : int
+            The ID of the event
+        subevent_id : int
+            The ID of the subevent
+        flatten : bool, True
+            If True, output will be flattened into a 1D array
+
+        Returns
+        =======
+        output : numpy array
+            The spectrogram array. 1D if `flatten` is True, 2D if `flatten` is False
+        """
+
         subevent_audio = self.get_subevent_audio(session_id, event_id, subevent_id)
-        return audio.get_spectrogram(subevent_audio, log=self.log, flatten=True)
+        return audio.get_spectrogram(subevent_audio, log=self.log, flatten=flatten)[2]
 
 
     def get_audio_length(self):
+        """Returns the dimension of an audio chunk based on the subevent time and sampling rate"""
+
         data = self.label_data.iloc[0]
         return len(self.get_subevent_audio(
             session_id = data['session_id'],
@@ -322,6 +393,8 @@ class Train(object):
 
 
     def get_spectrogram_length(self):
+        """Returns the dimension of a spectrogram chunk based on the subevent time and sampling rate"""
+
         data = self.label_data.iloc[0]
         return self.get_subevent_spectrogram(
             session_id = data['session_id'],
@@ -331,23 +404,17 @@ class Train(object):
         ).shape[0]
 
 
-    def get_spectrogram_shape(self):
-        data = self.label_data.iloc[0]
-        return self.get_subevent_spectrogram(
-            session_id = data['session_id'],
-            event_id = data['event_id'],
-            subevent_id = data['subevent_id'],
-            flatten = False,
-        ).shape
-
-
     def prep_data(self, spectrogram=True, train_frac=0.8):
-        """Sets training and validation datasets, self.X_train, self.y_train, self.X_validate, self.y_validate
+        """Establishes the training and validation datasets
+
+        This method sets the attributes `self.X_train`, `self.y_train`, `self.X_validate`, `self.y_validate`
 
         Parameters
         ==========
         spectogram : bool, True
             If False, the audio is used as training data instead of corresponding spectrogram
+        train_frac : float, 0.8
+            What fraction of the data should be used for training? The rest is used for validation
         """
 
         a = self.label_data.shape[0]
@@ -387,6 +454,19 @@ class Train(object):
 
 
     def fit_data(self, *args, **kwargs):
+        """Trains a random forest classifier and calculates a model score.
+
+        This method trains a model that is stored as `self.model`. `self.model` is a
+        `sklearn.ensemble.RandomForestClassifier` object. The model score (fraction of correctly
+        predicted validation samples) is stored as `self.model.xval_score_`
+
+        Parameters
+        ==========
+        *args, **kwargs
+            Uses any and all parameters accepted by `sklearn.ensemble.RandomForestClassifier`
+            https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestClassifier.html
+        """
+
         self.model = RandomForestClassifier(*args, **kwargs)
 
         self.model.fit(self.X_train, self.y_train)
@@ -397,6 +477,19 @@ class Train(object):
 
 
     def save_model(self, filepath):
+        """Saves `self.model` as a file with using `joblib.dump`
+
+        Saves `self.model`, which is a `sklearn.ensemble.RandomForestClassifier` object, to
+        `filepath`.  Before saving, some the `sample_rate`, `subevent_time`, `subevent_len`, and
+        whether the spectrogram was log-transformed (`log`) are stored as additional attributes of
+        `self.model`.
+
+        Parameters
+        ==========
+        filepath : str, Path-like
+            Stores the model with `joblib.dump`
+        """
+
         self.model.log = self.log
         self.model.subevent_time = self.subevent_time
         self.model.sample_rate = maple.RATE
@@ -423,7 +516,7 @@ class Classifier(object):
         data = np.zeros((num_chunks, self.model.n_features_))
         for i in range(num_chunks):
             audio_chunk = event_audio[i * self.model.subevent_len: (i + 1) * self.model.subevent_len]
-            data[i, :] = audio.get_spectrogram(audio_chunk, fs=self.model.sample_rate, log=self.model.log, flatten=True)
+            data[i, :] = audio.get_spectrogram(audio_chunk, fs=self.model.sample_rate, log=self.model.log, flatten=True)[2]
 
         chunk_predictions = self.model.predict(data)
 
