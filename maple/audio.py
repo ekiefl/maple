@@ -7,6 +7,7 @@ import numpy as np
 import scipy.signal as signal
 import matplotlib.pyplot as plt
 
+from scipy.fft import fft, fftfreq
 
 def PSD(data, fs=None):
     if not fs: fs = maple.RATE
@@ -36,7 +37,7 @@ def bandpass(data, lowcut, highcut):
     return signal.sosfilt(sos, data).astype(data.dtype)
 
 
-def get_spectrogram(audio, fs=None, log=False, flatten=True):
+def get_spectrogram(audio, fs=None, log=False, flatten=False):
     if fs is None:
         fs = maple.RATE
 
@@ -48,9 +49,27 @@ def get_spectrogram(audio, fs=None, log=False, flatten=True):
     if flatten:
         output = output.flatten()
 
-    return output
+    return f, t, output
 
 
+def get_fourier(audio, fs=None):
+    """Return the amplitude of fourier transformed data, along with frequencies
+
+    Returns
+    =======
+    out : amplitudes, frequencies
+    """
+
+    N = len(audio)
+
+    fs = fs if fs is not None else maple.RATE
+    T = 1/fs
+
+    faudio = fft(audio)[:N//2]
+    amps = 2/N * np.abs(faudio)
+    f = fftfreq(N, T)[:N//2]
+
+    return amps, f
 
 
 
