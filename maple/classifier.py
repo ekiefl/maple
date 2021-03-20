@@ -423,34 +423,48 @@ class Train(object):
         else:
             b = self.get_audio_length()
 
-        X = np.zeros((a, b))
-        y = np.zeros(a).astype(int)
+        self.X = np.zeros((a, b))
+        self.y = np.zeros(a).astype(int)
 
-        shuffled_label_data = self.label_data.sample(frac=1).reset_index(drop=True)
-
-        for i, data in shuffled_label_data.iterrows():
-            label = self.label_dict[data['label']]
-            y[i] = label
+        for i, subevent in self.label_data.iterrows():
+            label = self.label_dict[subevent['label']]
+            self.y[i] = label
 
             if spectrogram:
-                X[i, :] = self.get_subevent_spectrogram(
-                    session_id = data['session_id'],
-                    event_id = data['event_id'],
-                    subevent_id = data['subevent_id'],
+                self.X[i, :] = self.get_subevent_spectrogram(
+                    session_id = subevent['session_id'],
+                    event_id = subevent['event_id'],
+                    subevent_id = subevent['subevent_id'],
                     flatten = True,
                 )
             else:
-                X[i, :] = self.get_subevent_audio(
-                    session_id = data['session_id'],
-                    event_id = data['event_id'],
-                    subevent_id = data['subevent_id'],
+                self.X[i, :] = self.get_subevent_audio(
+                    session_id = subevent['session_id'],
+                    event_id = subevent['event_id'],
+                    subevent_id = subevent['subevent_id'],
                 )
 
-        self.X_train = X[:int(a*train_frac), :]
-        self.y_train = y[:int(a*train_frac)]
+        self.split_data(train_frac=0.8)
 
-        self.X_validate = X[int(a*train_frac):, :]
-        self.y_validate = y[int(a*train_frac):]
+
+    def split_data(self, train_frac=0.8):
+        """Splits the data into training or validating sets by random shuffling"""
+
+        a = len(self.y)
+
+        indices = np.arange(a)
+
+        # Shuffles in place
+        np.random.shuffle(indices)
+
+        shuffled_indices = indices
+        del indices
+
+        self.X_train = self.X[shuffled_indices[:int(a*train_frac)], :]
+        self.y_train = self.y[shuffled_indices[:int(a*train_frac)]]
+
+        self.X_validate = self.X[shuffled_indices[int(a*train_frac):], :]
+        self.y_validate = self.y[shuffled_indices[int(a*train_frac):]]
 
 
     def fit_data(self, *args, **kwargs):
