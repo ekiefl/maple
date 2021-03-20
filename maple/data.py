@@ -10,6 +10,7 @@ import shutil
 import sqlite3
 import datetime
 import sounddevice as sd
+import matplotlib.pyplot as plt
 
 from pathlib import Path
 from scipy.io.wavfile import read as wav_read
@@ -273,6 +274,15 @@ class SessionAnalysis(DataBase):
         return self.dog.loc[event_id, 'audio']
 
 
+    def get_subevent_audio(self, event_id, subevent_id, subevent_time):
+        event_audio = self.get_event_audio(event_id)
+
+        subevent_len = int(subevent_time * maple.RATE)
+        subevent_audio = event_audio[subevent_id * subevent_len: (subevent_id + 1) * subevent_len]
+
+        return subevent_audio
+
+
     def get_owner_event(self, event_id):
         raise NotImplementedError("FIXME Not implemented yet")
 
@@ -296,5 +306,58 @@ class SessionAnalysis(DataBase):
 
     def save_event_as_wav(self, event_id, path):
         wav_write(path, maple.RATE, self.dog.loc[event_id, 'audio'])
+
+
+    def save_event_as_txt(self, event_id, path):
+        np.savetxt(path, self.dog.loc[event_id, 'audio'])
+
+
+    def plot_audio_event(self, event_id, xlim=None):
+        label = self.dog.loc[event_id, 'class']
+        event_audio = self.get_event_audio(event_id)
+        t = np.arange(0, len(event_audio)/maple.RATE, 1/maple.RATE)
+
+        plt.plot(t, event_audio, c=self.class_colors.get(label, self.class_colors['none']))
+        plt.xlabel('Time [s]')
+        plt.ylabel("Signal amplitude [16 bit]")
+
+        if xlim:
+            plt.xlim(xlim[0], xlim[1])
+
+        plt.show()
+
+
+    def plot_audio_event_freq(self, event_id):
+        label = self.dog.loc[event_id, 'class']
+        event_audio = self.get_event_audio(event_id)
+
+        amps, fs = audio.get_fourier(event_audio)
+        plt.plot(fs, amps, c=self.class_colors.get(label, self.class_colors['none']))
+        plt.xlabel('Frequency [Hz]')
+        plt.ylabel("Signal amplitude [16 bit]")
+        plt.show()
+
+
+    def plot_audio_event_spectrogram(self, event_id, log=True, flatten=False):
+        from matplotlib.colors import LinearSegmentedColormap
+
+        label = self.dog.loc[event_id, 'class']
+        color = self.class_colors.get(label, self.class_colors['none'])
+        colors = [(1, 1, 1), utils.hex_to_rgb(color)]
+        cm = LinearSegmentedColormap.from_list("Custom", colors, N=100)
+
+        event_audio = self.get_event_audio(event_id)
+        f, t, S = audio.get_spectrogram(event_audio, log=log, flatten=flatten)
+
+        if flatten:
+            plt.plot(S, c=color)
+            plt.ylabel('Signal amplitude [16 bit]')
+            plt.xlabel('Flattened axis')
+            plt.show()
+        else:
+            plt.pcolormesh(t, f, S, shading='flat', cmap=cm)
+            plt.ylabel('Frequency [Hz]')
+            plt.xlabel('Time [sec]')
+            plt.show()
 
 

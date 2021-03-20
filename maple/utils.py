@@ -10,6 +10,12 @@ import datetime
 
 from collections import OrderedDict
 
+def hex_to_rgb(value):
+    value = value.lstrip('#')
+    lv = len(value)
+    return tuple(int(value[i:i + lv // 3], 16)/255 for i in range(0, lv, lv // 3))
+
+
 def get_mic_id():
     p = pyaudio.PyAudio()
     info = p.get_host_api_info_by_index(0)
