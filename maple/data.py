@@ -218,6 +218,16 @@ class SessionAnalysis(DataBase):
         self.num_events = self.dog.shape[0]
         self.psds = None
 
+        self.class_colors = {
+            'none': '#DDDDDD',
+            'whine': '#165BAA',
+            'howl': '#A155B9',
+            'bark': '#AE2D68',
+            'play': '#B0D8A4',
+            'scratch_cage': '#F2C85B',
+            'scratch_door': '#F2C85B',
+        }
+
 
     def trim_ends(self, minutes=1):
         self.dog = self.dog[

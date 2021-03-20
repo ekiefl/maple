@@ -206,6 +206,7 @@ class Analysis(object):
         self.histogram(self.session)
 
         # Enter interactive session
+        ss = self.session
         import ipdb; ipdb.set_trace()
 
 
@@ -295,16 +296,6 @@ class Analysis(object):
 
         ################################################################
 
-        class_colors = {
-            'none': '#DDDDDD',
-            'whine': '#165BAA',
-            'howl': '#A155B9',
-            'bark': '#AE2D68',
-            'play': '#B0D8A4',
-            'scratch_cage': '#F2C85B',
-            'scratch_door': '#F2C85B',
-        }
-
         binned_class_counts = session.dog.\
             groupby([pd.Grouper(key='t_start', freq='1min'), 'class'])\
             ['event_id'].\
@@ -342,7 +333,7 @@ class Analysis(object):
             astype(int).\
             droplevel(0, axis=1)
 
-        for c in class_colors:
+        for c in session.class_colors:
             if c not in binned_class_counts.columns:
                 binned_class_counts[c] = 0
         binned_class_counts = binned_class_counts[maple.classifier.labels.values()]
@@ -354,7 +345,7 @@ class Analysis(object):
                 y=binned_class_counts[c].values,
                 name=c,
                 mode='lines',
-                line=dict(width=0.5, color=class_colors[c]),
+                line=dict(width=0.5, color=session.class_colors[c]),
                 stackgroup='one',
                 groupnorm='percent' # sets the normalization for the sum of the stackgroup
             ))
