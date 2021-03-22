@@ -365,6 +365,11 @@ class Analysis(object):
             title=f"Session {session_id}",
             title_font_family="rockwell",
             font_family="rockwell",
+            legend=dict(
+                orientation = 'h',
+                yanchor = 'bottom',
+                y = 1.00,
+            ),
         )
         fig.update_xaxes(matches='x')
         fig['layout']['yaxis']['title']='Noise composition'
