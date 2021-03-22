@@ -266,6 +266,7 @@ class Analysis(object):
 
         data = session.dog["t_start"].append(session.owner.loc[session.owner['sentiment']=='bad', 't_start'])
         data = data.append(session.owner.loc[session.owner['sentiment']=='good', 't_start'])
+        data = pd.to_datetime(data)
 
         dog_rug = dict(
             mode = "markers",
@@ -370,6 +371,9 @@ class Analysis(object):
                 yanchor = 'bottom',
                 y = 1.00,
             ),
+            xaxis=dict(
+                range=[data.min(), data.max()]
+            )
         )
         fig.update_xaxes(matches='x')
         fig['layout']['yaxis']['title']='Noise composition'
