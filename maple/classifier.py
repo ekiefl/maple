@@ -13,6 +13,7 @@ import sounddevice as sd
 
 from scipy import signal
 from pathlib import Path
+from sklearn.model_selection import GridSearchCV
 from sklearn.ensemble import RandomForestClassifier
 
 labels = {
@@ -182,8 +183,6 @@ class LabelAudio(object):
 
 
     def save_data(self):
-        # FIXME
-        return
         self.data['event_id'] = self.data['event_id'].astype(int)
         self.data['subevent_id'] = self.data['subevent_id'].astype(int)
         self.data.to_csv(self.label_data_path, sep='\t', index=False)
@@ -263,11 +262,13 @@ class Train(object):
         if args.label_data is None:
             raise Exception("Must provide --label-data in order to train!")
 
-        self.model_dir = Path(args.model_dir)
-        if self.model_dir.exists():
-            raise Exception(f"Will not overwrite folder {self.model_dir}, since it already exists")
-        else:
-            self.model_dir.mkdir()
+        A = lambda x: args.__dict__.get(x, None)
+        self.trans = A('transformation')
+        self.log = A('log_the_data')
+        if self.log and self.trans not in ['spectrogram', 'fourier']:
+            raise Exception("Cannot log transform data unless --transformation is in {'spectrogram', 'fourier'}")
+
+        self.model_dir = A('model_dir')
 
         self.label_data_path = Path(args.label_data)
         self.label_data = pd.read_csv(self.label_data_path, sep='\t')
@@ -280,24 +281,36 @@ class Train(object):
             self.dbs[session_id] = data.SessionAnalysis(name=session_id)
 
         self.model = None
-        self.log = False
 
 
-    def run(self):
+    def run(self, disconnect_dbs=True):
         """Run the training procedure
 
         This method glues the procedure together.
+
+        Parameters
+        ==========
+        disconnect_dbs : bool, True
+            Disconnect from the session databases at the end of this method.
         """
 
-        self.prep_data(spectrogram=True)
+        self.setup_dir()
+        self.prep_data(transformation=self.trans)
 
-        self.fit_data(
-            bootstrap = True,
-            oob_score = True,
-        )
+        self.fit_data()
 
         self.save_model(self.model_dir / 'model.dat')
-        self.disconnect_dbs()
+
+        if disconnect_dbs:
+            self.disconnect_dbs()
+
+
+    def setup_dir(self):
+        self.model_dir = Path(self.model_dir)
+        if self.model_dir.exists():
+            raise Exception(f"Will not overwrite folder {self.model_dir}, since it already exists")
+        else:
+            self.model_dir.mkdir()
 
 
     def disconnect_dbs(self):
@@ -357,7 +370,7 @@ class Train(object):
         return subevent_audio
 
 
-    def get_subevent_spectrogram(self, session_id, event_id, subevent_id, flatten=True):
+    def get_subevent_spectrogram(self, session_id, event_id, subevent_id):
         """Calculates the spectrogram of a subevent
 
         Parameters
@@ -368,17 +381,37 @@ class Train(object):
             The ID of the event
         subevent_id : int
             The ID of the subevent
-        flatten : bool, True
-            If True, output will be flattened into a 1D array
 
         Returns
         =======
         output : numpy array
-            The spectrogram array. 1D if `flatten` is True, 2D if `flatten` is False
+            A flattened spectrogram array.
         """
 
         subevent_audio = self.get_subevent_audio(session_id, event_id, subevent_id)
-        return audio.get_spectrogram(subevent_audio, log=self.log, flatten=flatten)[2]
+        return audio.get_spectrogram(subevent_audio, flatten=True)[2]
+
+
+    def get_subevent_fourier(self, session_id, event_id, subevent_id):
+        """Calculates the fourier amplitude spectrum of a subevent
+
+        Parameters
+        ==========
+        session_id : str
+            The ID of the session that the event is in
+        event_id : int
+            The ID of the event
+        subevent_id : int
+            The ID of the subevent
+
+        Returns
+        =======
+        output : numpy array
+            A fourier amplitude array.
+        """
+
+        subevent_audio = self.get_subevent_audio(session_id, event_id, subevent_id)
+        return audio.get_fourier(subevent_audio)[0]
 
 
     def get_audio_length(self):
@@ -396,32 +429,48 @@ class Train(object):
         """Returns the dimension of a spectrogram chunk based on the subevent time and sampling rate"""
 
         data = self.label_data.iloc[0]
-        return self.get_subevent_spectrogram(
+        return len(self.get_subevent_spectrogram(
             session_id = data['session_id'],
             event_id = data['event_id'],
             subevent_id = data['subevent_id'],
-            flatten = True,
-        ).shape[0]
+        ))
 
 
-    def prep_data(self, spectrogram=True, train_frac=0.8):
+    def get_fourier_length(self):
+        """Returns the dimension of a fourier chunk based on the subevent time and sampling rate"""
+
+        data = self.label_data.iloc[0]
+        return len(self.get_subevent_fourier(
+            session_id = data['session_id'],
+            event_id = data['event_id'],
+            subevent_id = data['subevent_id'],
+        ))
+
+
+    def prep_data(self, transformation='spectrogram'):
         """Establishes the training and validation datasets
 
-        This method sets the attributes `self.X_train`, `self.y_train`, `self.X_validate`, `self.y_validate`
+        This method sets the attributes `self.X`, and `self.y`
 
         Parameters
         ==========
-        spectogram : bool, True
-            If False, the audio is used as training data instead of corresponding spectrogram
-        train_frac : float, 0.8
-            What fraction of the data should be used for training? The rest is used for validation
+        transformation : str, 'spectrogram'
+            Pick any of {'spectrogram', 'none', 'fourier'}.
         """
 
         a = self.label_data.shape[0]
-        if spectrogram:
+
+        if transformation == 'spectrogram':
+            transformation_fn = self.get_subevent_spectrogram
             b = self.get_spectrogram_length()
-        else:
+        elif transformation == 'none':
+            transformation_fn = self.get_subevent_audio
             b = self.get_audio_length()
+        elif transformation == 'fourier':
+            transformation_fn = self.get_subevent_fourier
+            b = self.get_fourier_length()
+        else:
+            raise Exception(f"transformation '{transformation}' not implemented.")
 
         self.X = np.zeros((a, b))
         self.y = np.zeros(a).astype(int)
@@ -430,25 +479,18 @@ class Train(object):
             label = self.label_dict[subevent['label']]
             self.y[i] = label
 
-            if spectrogram:
-                self.X[i, :] = self.get_subevent_spectrogram(
-                    session_id = subevent['session_id'],
-                    event_id = subevent['event_id'],
-                    subevent_id = subevent['subevent_id'],
-                    flatten = True,
-                )
-            else:
-                self.X[i, :] = self.get_subevent_audio(
-                    session_id = subevent['session_id'],
-                    event_id = subevent['event_id'],
-                    subevent_id = subevent['subevent_id'],
-                )
+            self.X[i, :] = transformation_fn(
+                session_id = subevent['session_id'],
+                event_id = subevent['event_id'],
+                subevent_id = subevent['subevent_id'],
+            )
 
-        self.split_data(train_frac=0.8)
+        if self.log:
+            self.X = np.log2(self.X)
 
 
     def split_data(self, train_frac=0.8):
-        """Splits the data into training or validating sets by random shuffling"""
+        """This method sets the attributes `self.X_train`, `self.y_train`, `self.X_validate`, `self.y_validate`"""
 
         a = len(self.y)
 
@@ -467,27 +509,34 @@ class Train(object):
         self.y_validate = self.y[shuffled_indices[int(a*train_frac):]]
 
 
-    def fit_data(self, *args, **kwargs):
+    def fit_data(self, param_grid=None, cv=20):
         """Trains a random forest classifier and calculates a model score.
 
-        This method trains a model that is stored as `self.model`. `self.model` is a
-        `sklearn.ensemble.RandomForestClassifier` object. The model score (fraction of correctly
-        predicted validation samples) is stored as `self.model.xval_score_`
+        This method trains a bunch of models over a small subset of hyperparameter space based on an
+        ad-hoc analysis described here:
+        ekiefl.github.io/2021/03/14/maple-classifier/#-hyperparameter-tuning
 
-        Parameters
-        ==========
-        *args, **kwargs
-            Uses any and all parameters accepted by `sklearn.ensemble.RandomForestClassifier`
-            https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestClassifier.html
+        For each model setting, a 5-fold cross validation is used. When the most accurate model is
+        determined, it is stored as `self.model` and the 5-fold cross validation accuracy is stored
+        as self.model.xval_score_.
         """
+        if param_grid is None:
+            param_grid = {
+                'n_estimators': [200],
+                'criterion': ['gini', 'entropy'],
+            },
 
-        self.model = RandomForestClassifier(*args, **kwargs)
+        model_search = GridSearchCV(
+            estimator = RandomForestClassifier(oob_score=True),
+            param_grid = param_grid,
+            cv = cv,
+            verbose = 2,
+            n_jobs = -1,
+        )
+        model_search.fit(self.X, self.y)
 
-        self.model.fit(self.X_train, self.y_train)
-        prediction = self.model.predict(self.X_validate)
-        correct = (prediction == self.y_validate)
-
-        self.model.xval_score_ = correct.sum() / len(correct)
+        self.model = model_search.best_estimator_
+        self.model.xval_score_ = model_search.best_score_
 
 
     def save_model(self, filepath):
