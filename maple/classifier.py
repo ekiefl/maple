@@ -13,7 +13,6 @@ import sounddevice as sd
 
 from scipy import signal
 from pathlib import Path
-from sklearn import preprocessing
 from sklearn.model_selection import GridSearchCV
 from sklearn.ensemble import RandomForestClassifier
 
@@ -245,7 +244,6 @@ class LabelAudio(object):
 
 
 class Train(object):
-
     def __init__(self, args=argparse.Namespace()):
         """Train a model based off label data
 
@@ -490,7 +488,7 @@ class Train(object):
             self.X = np.log2(self.X)
 
         if self.norm:
-            self.X = preprocessing.StandardScaler().fit_transform(self.X)
+            self.X = (self.X - self.X.mean(axis=1)[:, None]) / self.X.std(axis=1)[:,None]
 
 
     def split_data(self, train_frac=0.8):
@@ -513,7 +511,7 @@ class Train(object):
         self.y_validate = self.y[shuffled_indices[int(a*train_frac):]]
 
 
-    def fit_data(self, param_grid=None, cv=5):
+    def fit_data(self, param_grid=None, cv=20):
         """Trains a random forest classifier and calculates a model score.
 
         This method trains a bunch of models over a small subset of hyperparameter space based on an
@@ -574,7 +572,6 @@ class Classifier(object):
             raise Exception(f'{path} does not exist')
 
         self.model = joblib.load(path)
-        self.scaler = preprocessing.StandardScaler()
 
 
     def predict(self, event_audio, as_label=False):
@@ -608,7 +605,7 @@ class Classifier(object):
             data = np.log2(data)
 
         if self.model.norm:
-            data = self.scaler.fit_transform(data.reshape(1, -1))
+            data = (data - data.mean()) / data.std()
 
         return data
 
