@@ -7,6 +7,7 @@ import maple.utils as utils
 import maple.events as events
 
 from maple.data import DataBase, SessionAnalysis
+from maple.classifier import Classifier
 from maple.owner_recordings import OwnerRecordings
 
 import time
@@ -43,6 +44,9 @@ class MonitorDog(events.Monitor):
         self.praise = A('praise')
         self.scold = A('scold')
         self.sound_check = A('sound_check')
+
+        self.model_path = Path(A('model_dir') or maple.model_dir) / 'model.dat'
+        self.classifier = Classifier(self.model_path)
 
         self.recalibration_rate = datetime.timedelta(minutes=self.recalibration_rate)
 
@@ -95,7 +99,7 @@ class MonitorDog(events.Monitor):
             'power': energy/t_in_sec,
             'pressure_mean': pressure,
             'pressure_sum': pressure*t_in_sec,
-            'class': None, # TODO
+            'class': self.classifier.predict(data, as_label=True),
             'audio': utils.convert_array_to_blob(data),
             'train_label': None,
         }
