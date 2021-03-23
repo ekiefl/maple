@@ -4,6 +4,7 @@ import maple
 import sounddevice as sd
 
 import numpy as np
+import noisereduce as nr
 import scipy.signal as signal
 import matplotlib.pyplot as plt
 
@@ -26,10 +27,7 @@ def plot_PSD(data, fs=None):
 
 
 def denoise(data, bg_data):
-    fft_data = np.fft.rfft(data)
-    fft_bg_data = np.fft.rfft(bg_data, n=len(data))
-
-    return np.fft.irfft(fft_data - fft_bg_data).astype(data.dtype)
+    return nr.reduce_noise(audio_clip=data.astype(float), noise_clip=bg_data.astype(float)).astype(maple.ARRAY_DTYPE)
 
 
 def bandpass(data, lowcut, highcut):

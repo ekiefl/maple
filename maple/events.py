@@ -230,11 +230,8 @@ class Monitor(object):
         A = lambda x: self.args.__dict__.get(x, None)
         self.quiet = A('quiet') or False
         self.calibration_time = A('calibration_time') or 3 # How many seconds is calibration window
-        self.calibration_threshold = A('calibration_threshold') or 0.3 # Required ratio of std pressure to mean pressure
-        self.calibration_tries = A('calibration_tries') or 4 # Number of running windows tried until threshold is doubled
         self.event_start_threshold = A('event_start_threshold') or 4 # standard deviations above background noise to start an event
         self.event_end_threshold = A('event_end_threshold') or 4 # standard deviations above background noise to end an event
-        self.skip_calibration = A('skip_calibration') or 0
         self.background_mean_preset = A('background_mean_preset')
         self.background_std_preset = A('background_std_preset')
         self.seconds = A('seconds') or 0.25 # see Detector docstring
@@ -262,56 +259,30 @@ class Monitor(object):
     def calibrate_background_noise(self):
         """Establish a background noise
 
-        Calculates moving windows of pressure. If the ratio between standard deviation and mean is less
-        than a threshold, signifying a constant level of noise, the mean pressure is chosen as the
-        background. Otherwise, it is tried again. If it fails too many times, the threshold is
-        increased and the process is repeated.
+        Samples a small segment of background noise for noise removal.
+
+        Notes
+        =====
+        - In a perfect world this method calibrates the self.background and self.background_std
+          attributes, however I have not developed a robust enough calibration system.
         """
 
-        if self.skip_calibration:
-            print('Skipping calibration.')
-            self.background = self.background_mean_preset
-            self.background_std = self.background_std_preset
-            return
-
-        print('Calibrating.')
-
-        pressure_vals = []
-        audio = []
+        print(f'Starting {self.calibration_time} second calibration.')
 
         # Number of chunks in running window based on self.calibration_time
         running_avg_domain = int(self.calibration_time / self.dt)
 
-        calibration_thresh = self.calibration_threshold
-
+        audio_chunks = []
         with self.stream:
-            tries = 0
-            while True:
-                for i in range(running_avg_domain):
-                    data = self.read_chunk()
-                    pressure_vals.append(utils.calc_mean_pressure(data))
-                    audio.append(data)
+            for i in range(running_avg_domain):
+                chunk = self.read_chunk()
+                audio_chunks.append(chunk)
 
-                # Test if threshold met
-                pressure_vals = np.array(pressure_vals)
-                ratio = np.std(pressure_vals)/np.mean(pressure_vals)
-                if ratio < calibration_thresh:
-                    self.background = np.mean(pressure_vals)
-                    self.background_std = np.std(pressure_vals)
-                    print('Calibrated.')
-                    return
+        self.background_audio = np.concatenate(audio_chunks)
+        self.background = self.background_mean_preset
+        self.background_std = self.background_std_preset
 
-                # Threshold not met, try again
-                print(f"Failed: Aimed for below {calibration_thresh}, got {ratio:.2f} ... Trying again.")
-                pressure_vals = []
-                audio = []
-                tries += 1
-
-                if tries == self.calibration_tries:
-                    # Max tries met--increase calibration threshold
-                    print(f'Calibration threshold not met after {tries} tries. Increasing threshold ({calibration_thresh:.2f} --> {0.1 + calibration_thresh:.2f})')
-                    tries = 0
-                    calibration_thresh += 0.1
+        print('Calibration done.')
 
 
     def setup(self):
@@ -338,7 +309,7 @@ class Monitor(object):
         )
 
 
-    def wait_for_event(self, timeout=False):
+    def wait_for_event(self, timeout=False, denoise=True):
         """Waits for an event
 
         Records the event, and returns the event audio as numpy array.
@@ -367,7 +338,8 @@ class Monitor(object):
                 if timeout and self.detector.timeout:
                     return None
 
-        return self.detector.get_event_data()
+        event_audio = self.detector.get_event_data()
+        return audio.denoise(event_audio, self.background_audio) if denoise else event_audio
 
 
     def stream_pressure_and_pitch_to_stdout(self, data):
