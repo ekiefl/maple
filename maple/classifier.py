@@ -262,7 +262,7 @@ class Train(object):
             raise Exception("Must provide --label-data in order to train!")
 
         A = lambda x: args.__dict__.get(x, None)
-        self.trans = A('transformation')
+        self.trans = A('transformation') or 'spectrogram'
         self.log = A('log_the_data')
         if self.log and self.trans not in ['spectrogram', 'fourier']:
             raise Exception("Cannot log transform data unless --transformation is in {'spectrogram', 'fourier'}")
@@ -632,7 +632,7 @@ class Classifier(object):
         elif self.model.trans == 'none':
             data = np.copy(audio_chunk)
         else:
-            raise Exception(f"Transformation '{selfmodel.trans}' not implemented for Classifier")
+            raise Exception(f"Transformation '{self.model.trans}' not implemented for Classifier")
 
         if self.model.log:
             data = np.log2(data)
