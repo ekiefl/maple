@@ -117,3 +117,53 @@ class Timer:
         self.last = checkpoint_key
 
         return checkpoint
+
+
+class TimeCode(object):
+    """Time a block of code.
+
+    This context manager times blocks of code.
+
+    Examples
+    ========
+
+    >>> import time
+    >>> import maple.utils as utils
+    >>> # EXAMPLE 1
+    >>> with utils.TimeCode() as t:
+    >>>     time.sleep(5)
+    ✓ Code finished successfully after 05s
+
+    >>> # EXAMPLE 2
+    >>> with terminal.TimeCode() as t:
+    >>>     time.sleep(5)
+    >>>     print(asdf) # undefined variable
+    ✖ Code encountered error after 05s
+
+    >>> # EXAMPLE 3
+    >>> with terminal.TimeCode(quiet=True) as t:
+    >>>     time.sleep(5)
+    >>> print(t.time)
+    0:00:05.000477
+    """
+
+    def __init__(self, quiet=False):
+        self.s_msg = '✓ Code finished after'
+        self.f_msg = '✖ Code encountered error after'
+        self.quiet = quiet
+
+
+    def __enter__(self):
+        self.timer = Timer()
+        return self
+
+
+    def __exit__(self, exception_type, exception_value, traceback):
+        self.time = self.timer.timedelta_to_checkpoint(self.timer.timestamp())
+        return_code = 0 if exception_type is None else 1
+
+        if not self.quiet:
+            if return_code == 0:
+                print(f"{self.s_msg} {self.time}")
+            else:
+                print(f"{self.f_msg} {self.time}")
