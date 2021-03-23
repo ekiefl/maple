@@ -607,6 +607,11 @@ class Classifier(object):
         if self.model.norm:
             data = (data - data.mean()) / data.std()
 
+        if np.isnan(data).all():
+            # In rare cases an audio chunk may have all zeros, which result in nan's that break
+            # the predict method.
+            data = np.zeros(len(data))
+
         return data
 
 
@@ -658,14 +663,5 @@ class Classify(Classifier):
     def disconnect_dbs(self):
         for db in self.sessions.values():
             db.disconnect()
-
-
-
-
-
-
-
-
-
 
 
