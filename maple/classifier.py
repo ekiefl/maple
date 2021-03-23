@@ -13,6 +13,7 @@ import sounddevice as sd
 
 from scipy import signal
 from pathlib import Path
+from sklearn import preprocessing
 from sklearn.model_selection import GridSearchCV
 from sklearn.ensemble import RandomForestClassifier
 
@@ -169,7 +170,6 @@ class LabelAudio(object):
 
             for _, row in self.data.iterrows():
                 if row['session_id'] == session_id and row['event_id'] == event['event_id']:
-                    print('Event already labelled')
                     break
             else:
                 break
@@ -280,6 +280,7 @@ class Train(object):
         for session_id in session_ids:
             self.dbs[session_id] = data.SessionAnalysis(name=session_id)
 
+        self.norm = True
         self.model = None
 
 
@@ -488,6 +489,9 @@ class Train(object):
         if self.log:
             self.X = np.log2(self.X)
 
+        if self.norm:
+            self.X = preprocessing.StandardScaler().fit_transform(self.X)
+
 
     def split_data(self, train_frac=0.8):
         """This method sets the attributes `self.X_train`, `self.y_train`, `self.X_validate`, `self.y_validate`"""
@@ -509,7 +513,7 @@ class Train(object):
         self.y_validate = self.y[shuffled_indices[int(a*train_frac):]]
 
 
-    def fit_data(self, param_grid=None, cv=20):
+    def fit_data(self, param_grid=None, cv=5):
         """Trains a random forest classifier and calculates a model score.
 
         This method trains a bunch of models over a small subset of hyperparameter space based on an
@@ -537,6 +541,7 @@ class Train(object):
 
         self.model = model_search.best_estimator_
         self.model.xval_score_ = model_search.best_score_
+        print(f'Model CV score: {self.model.xval_score_}')
 
 
     def save_model(self, filepath):
@@ -554,6 +559,8 @@ class Train(object):
         """
 
         self.model.log = self.log
+        self.model.norm = self.norm
+        self.model.trans = self.trans
         self.model.subevent_time = self.subevent_time
         self.model.sample_rate = maple.RATE
         self.model.subevent_len = int(self.model.subevent_time * self.model.sample_rate)
@@ -567,6 +574,7 @@ class Classifier(object):
             raise Exception(f'{path} does not exist')
 
         self.model = joblib.load(path)
+        self.scaler = preprocessing.StandardScaler()
 
 
     def predict(self, event_audio, as_label=False):
@@ -579,13 +587,30 @@ class Classifier(object):
         data = np.zeros((num_chunks, self.model.n_features_))
         for i in range(num_chunks):
             audio_chunk = event_audio[i * self.model.subevent_len: (i + 1) * self.model.subevent_len]
-            data[i, :] = audio.get_spectrogram(audio_chunk, fs=self.model.sample_rate, log=self.model.log, flatten=True)[2]
+            data[i, :] = self.transform(audio_chunk)
 
         chunk_predictions = self.model.predict(data)
 
         # most common
         prediction = np.bincount(chunk_predictions).argmax()
         return labels[prediction] if as_label else prediction
+
+
+    def transform(self, audio_chunk):
+        if self.model.trans == 'spectrogram':
+            data = audio.get_spectrogram(audio_chunk, fs=self.model.sample_rate, flatten=True)[2]
+        elif self.model.trans == 'fourier':
+            data = audio.get_fourier(audio_chunk, fs=self.model.sample_rate)[0]
+        else:
+            data = np.copy(audio_chunk)
+
+        if self.model.log:
+            data = np.log2(data)
+
+        if self.model.norm:
+            data = self.scaler.fit_transform(data.reshape(1, -1))
+
+        return data
 
 
 class Classify(Classifier):

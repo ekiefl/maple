@@ -19,6 +19,7 @@ sd.default.samplerate = RATE
 owner_recordings_dir = Path(__file__).parent.parent / 'data' / 'owner_recordings'
 db_dir = Path(__file__).parent.parent / 'data' / 'sessions'
 db_dir_temp = Path(__file__).parent.parent / 'data' / 'temp'
+model_dir = Path(__file__).parent.parent / 'model'
 
 # Load up the configuration file, store as nested dictionary `config`
 config_path = Path(__file__).parent.parent / 'config'
