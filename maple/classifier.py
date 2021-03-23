@@ -13,6 +13,7 @@ import sounddevice as sd
 
 from scipy import signal
 from pathlib import Path
+from sklearn import preprocessing
 from sklearn.model_selection import GridSearchCV
 from sklearn.ensemble import RandomForestClassifier
 
@@ -278,7 +279,8 @@ class Train(object):
         for session_id in session_ids:
             self.dbs[session_id] = data.SessionAnalysis(name=session_id)
 
-        self.norm = True
+        self.norm = False
+        self.scale = True
         self.model = None
 
 
@@ -298,7 +300,7 @@ class Train(object):
 
         self.fit_data()
 
-        self.save_model(self.model_dir / 'model.dat')
+        self.save()
 
         if disconnect_dbs:
             self.disconnect_dbs()
@@ -487,6 +489,11 @@ class Train(object):
         if self.log:
             self.X = np.log2(self.X)
 
+        if self.scale:
+            self.scaler = preprocessing.StandardScaler()
+            self.scaler.fit(self.X)
+            self.X = self.scaler.transform(self.X)
+
         if self.norm:
             self.X = (self.X - self.X.mean(axis=1)[:, None]) / self.X.std(axis=1)[:,None]
 
@@ -542,6 +549,11 @@ class Train(object):
         print(f'Model CV score: {self.model.xval_score_}')
 
 
+    def save(self):
+        self.save_model(self.model_dir / 'model.dat')
+        self.save_scaler(self.model_dir / 'scaler.dat')
+
+
     def save_model(self, filepath):
         """Saves `self.model` as a file with using `joblib.dump`
 
@@ -558,11 +570,27 @@ class Train(object):
 
         self.model.log = self.log
         self.model.norm = self.norm
+        self.model.scale = self.scale
         self.model.trans = self.trans
         self.model.subevent_time = self.subevent_time
         self.model.sample_rate = maple.RATE
         self.model.subevent_len = int(self.model.subevent_time * self.model.sample_rate)
         joblib.dump(self.model, filepath)
+
+
+    def save_scaler(self, filepath):
+        """Saves `self.scaler` as a file with using `joblib.dump`
+
+        Parameters
+        ==========
+        filepath : str, Path-like
+            Stores the model with `joblib.dump`
+        """
+
+        if not self.scale:
+            return
+
+        joblib.dump(self.scaler, filepath)
 
 
 class Classifier(object):
@@ -572,6 +600,9 @@ class Classifier(object):
             raise Exception(f'{path} does not exist')
 
         self.model = joblib.load(path)
+
+        if self.model.scale:
+            self.scaler = joblib.load(path.parent / 'scaler.dat')
 
 
     def predict(self, event_audio, as_label=False):
@@ -598,17 +629,22 @@ class Classifier(object):
             data = audio.get_spectrogram(audio_chunk, fs=self.model.sample_rate, flatten=True)[2]
         elif self.model.trans == 'fourier':
             data = audio.get_fourier(audio_chunk, fs=self.model.sample_rate)[0]
-        else:
+        elif self.model.trans == 'none':
             data = np.copy(audio_chunk)
+        else:
+            raise Exception(f"Transformation '{selfmodel.trans}' not implemented for Classifier")
 
         if self.model.log:
             data = np.log2(data)
+
+        if self.model.scale:
+            data = self.scaler.transform(data.reshape(1, -1)).flatten()
 
         if self.model.norm:
             data = (data - data.mean()) / data.std()
 
         if np.isnan(data).all():
-            # In rare cases an audio chunk may have all zeros, which result in nan's that break
+            # In diabolical cases an audio chunk may have all zeros, which result in nan's that break
             # the predict method.
             data = np.zeros(len(data))
 
@@ -619,16 +655,14 @@ class Classify(Classifier):
     """Update the 'class' column of the 'events' table in a list of sessions"""
 
     def __init__(self, args):
-        if args.model_dir is None:
-            raise Exception("You must provide a --model-dir")
-
         if args.session_paths is None:
             self.session_paths = sorted(maple.db_dir.glob('*/events.db'))
         else:
             self.session_paths = sorted([Path(x.strip()) for x in open(args.session_paths).readlines()])
         self.sessions = {}
 
-        path = Path(args.model_dir) / 'model.dat'
+        A = lambda x: args.__dict__.get(x, None)
+        path = Path(A('model_dir') or maple.model_dir) / 'model.dat'
         Classifier.__init__(self, path)
 
 
