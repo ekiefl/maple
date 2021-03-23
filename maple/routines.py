@@ -134,6 +134,8 @@ class MonitorDog(events.Monitor):
             self.play_sample_until_user_happy()
 
         self.setup()
+        self.db.set_meta_value('background_audio', utils.convert_array_to_blob(self.background_audio))
+
         self.timer = utils.Timer()
         self.timer.make_checkpoint('calibration') # just calibrated
 

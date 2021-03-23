@@ -27,7 +27,11 @@ def plot_PSD(data, fs=None):
 
 
 def denoise(data, bg_data):
-    return nr.reduce_noise(audio_clip=data.astype(float), noise_clip=bg_data.astype(float)).astype(maple.ARRAY_DTYPE)
+    return nr.reduce_noise(
+        audio_clip=data.astype(float),
+        noise_clip=bg_data.astype(float),
+        pad_clipping=True,
+    ).astype(maple.ARRAY_DTYPE)
 
 
 def bandpass(data, lowcut, highcut):

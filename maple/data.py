@@ -258,6 +258,10 @@ class SessionAnalysis(DataBase):
         self.meta = self.get_table_as_dataframe('self')
 
 
+    def get_background(self):
+        self.background_audio = utils.convert_blob_to_array(self.meta.loc[self.meta['key']=='background_audio', 'value'].iloc[0])
+
+
     def get_dog_events(self):
         self.dog = self.get_table_as_dataframe('events')
 
