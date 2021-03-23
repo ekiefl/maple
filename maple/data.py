@@ -4,6 +4,7 @@ import maple
 import maple.utils as utils
 import maple.audio as audio
 
+import time
 import numpy as np
 import pandas as pd
 import shutil
@@ -287,11 +288,19 @@ class SessionAnalysis(DataBase):
         raise NotImplementedError("FIXME Not implemented yet")
 
 
-    def play(self, event_id):
-        sd.play(self.get_event_audio(event_id), blocking=True)
+    def play(self, event_id, norm=False):
+        event_audio = self.get_event_audio(event_id)
+
+        if norm:
+            # Normalize volumes so barks aren't too loud, and grrrs aren't too soft
+            event_audio = np.copy(event_audio).astype(float)
+            event_audio *= 10000 / np.max(event_audio)
+            event_audio = event_audio.astype(maple.ARRAY_DTYPE)
+
+        sd.play(event_audio, blocking=True)
 
 
-    def play_many(self, start=None, stop=None):
+    def play_many(self, start=None, stop=None, norm=True, sleep=0):
         """Play in order of df"""
 
         if start is None:
@@ -301,7 +310,8 @@ class SessionAnalysis(DataBase):
 
         for event_id in range(start, stop+1):
             print(f"Playing:\n{self.dog.loc[event_id, [x for x in self.dog.columns if x != 'audio']]}\n")
-            self.play(event_id)
+            self.play(event_id, norm=norm)
+            time.sleep(sleep)
 
 
     def save_event_as_wav(self, event_id, path):
