@@ -380,7 +380,7 @@ class Responder(object):
         self.scold = A('scold')
         if self.scold is None: self.scold = False
         self.scold_trigger = A('scold_trigger') or 0.03
-        self.scold_scratch_door_count = A('scold_bark_count') or 5
+        self.scold_scratch_door_count = A('scold_scratch_door_count') or 5
         self.scold_bark_count = A('scold_bark_count') or 10
         self.scold_consec_bark_count = A('scold_consec_bark_count') or 3
         self.scold_response_window = A('scold_response_window') or 0.5
@@ -484,7 +484,7 @@ class Responder(object):
         praise_window = self.events_in_window[(timestamp - self.events_in_window['t_end']) < self.praise_response_window]
 
         # Remove neutral events from praise window
-        praise_window = praise_window[~praise_window['event'].isin(self.neutral_classes)]
+        praise_window = praise_window[~praise_window['class'].isin(self.neutral_classes)]
 
         if praise_window.empty:
             return True, 'quiet'
@@ -510,11 +510,11 @@ class Responder(object):
 
         class_counts = scold_window['class'].value_counts()
 
-        if class_counts.get('door_scratch', 0) >= self.scold_scratch_door_count:
+        if class_counts.get('scratch_door', 0) >= self.scold_scratch_door_count:
             return True, 'scratching_door'
 
         num_barks_thresh = class_counts.get('bark', 0) >= self.scold_bark_count
-        consecutive_barks_thresh = (scold_window.iloc[-self.scold_consec_bark_count:]['class'] == 'bark')
+        consecutive_barks_thresh = (scold_window.iloc[-self.scold_consec_bark_count:]['class'] == 'bark').all()
         volume_bark_thresh = scold_window.iloc[-1]['pressure_sum'] > self.scold_trigger
         if num_barks_thresh and consecutive_barks_thresh and volume_bark_thresh:
             return True, 'too_loud'
