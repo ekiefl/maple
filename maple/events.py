@@ -514,7 +514,7 @@ class Responder(object):
             return True, 'scratching_door'
 
         num_barks_thresh = class_counts.get('bark', 0) >= self.scold_bark_count
-        consecutive_barks_thresh = (scold_window.iloc[-self.scold_consec_bark_count:]['class'] == 'bark')
+        consecutive_barks_thresh = (scold_window.iloc[-self.scold_consec_bark_count:]['class'] == 'bark').all()
         volume_bark_thresh = scold_window.iloc[-1]['pressure_sum'] > self.scold_trigger
         if num_barks_thresh and consecutive_barks_thresh and volume_bark_thresh:
             return True, 'too_loud'
