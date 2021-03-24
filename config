@@ -22,10 +22,14 @@ praise_cooldown = 2
 scold = 0
 # The timeframe when considering if to scold (minutes)
 scold_response_window = 1.0
-# The sum of pressure sums in timeframe to consider scolding
-scold_threshold = 4.0
 # The pressure sum of the event required to trigger scolding
 scold_trigger = 0.50
+# The number of door scratches in window to trigger scolding
+scold_scratch_door_count = 5
+# The number of barks in window to consider scolding
+scold_bark_count = 10
+# The last N events that should be barks to consider scolding
+scold_consec_bark_count = 3
 # After scolding, wait this many minutes to consider scolding again.
 scold_cooldown = 2
 # Warning has not been implemented. These do nothing
@@ -35,17 +39,10 @@ warn_cooldown = 1
 
 [calibration]
 # The length of the audio in seconds that is used to calibrate
-calibration_time = 3
-# The standard deviation divided by the mean of the audio signal must be less than this value to be considered calibrated
-calibration_threshold = 0.3
-# After this many failed attemps, the calibration_threshold will be increased by 0.1 and the process is repeated.
-calibration_tries = 4
-# Use hard-coded background
-skip_calibration = 1
-# predetermined background mean (only used if skip_calibration = 1)
-background_mean_preset = 0.0010
-# predetermined background mean (only used if skip_calibration = 1)
+calibration_time = 2
+# background std and mean. Increase to make event start and end thresholds less sensitive
 background_std_preset = 0.0003
+background_mean_preset = 0.0010
 
 [detector]
 # Standard deviations above background noise to consider start an event
