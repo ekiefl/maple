@@ -267,7 +267,7 @@ class Train(object):
         if self.log and self.trans not in ['spectrogram', 'fourier']:
             raise Exception("Cannot log transform data unless --transformation is in {'spectrogram', 'fourier'}")
 
-        self.model_dir = A('model_dir')
+        self.model_dir = Path(A('model_dir') or maple.model_dir)
 
         self.label_data_path = Path(args.label_data)
         self.label_data = pd.read_csv(self.label_data_path, sep='\t')
