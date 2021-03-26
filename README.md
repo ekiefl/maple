@@ -4,4 +4,4 @@ This is the homepage for my project maple, an open source software I have develo
 
 # Development blog
 
-The development of this entire project has been meticulously blogged and can be found [here](ekiefl.github.io/projects/maple)
+The development of this entire project has been meticulously blogged and can be found [here](https://ekiefl.github.io/projects/maple)
