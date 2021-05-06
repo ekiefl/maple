@@ -43,14 +43,14 @@ class LiveStream(object):
         bars="-"*int(2000*peak/2**16)
         print("%05d %s"%(peak,bars))
 
-        x = data
+        #x = data
 
-        w = np.fft.fft(x)
-        freqs = np.fft.fftfreq(len(x))
+        #w = np.fft.fft(x)
+        #freqs = np.fft.fftfreq(len(x))
 
-        max_freq = abs(freqs[np.argmax(w)] * maple.RATE)
-        peak = max_freq
-        bars="o"*int(6000*peak/2**16)
-        print("%05d %s"%(peak,bars))
+        #max_freq = abs(freqs[np.argmax(w)] * maple.RATE)
+        #peak = max_freq
+        #bars="o"*int(6000*peak/2**16)
+        #print("%05d %s"%(peak,bars))
 
 
