@@ -5,6 +5,15 @@ import numpy as np
 import pyaudio
 import argparse
 
+def get_mic_index():
+    aaa = pyaudio.PyAudio()
+    info = aaa.get_host_api_info_by_index(0)
+    numdevices = info.get('deviceCount')
+    for i in range(0, numdevices):
+        if aaa.get_device_info_by_host_api_device_index(0, i).get('name') == "USB PnP Audio Device":
+            return i
+    else:
+        raise Exception("USB PnP Audio Device not found")
 
 class LiveStream(object):
     def __init__(self, args = argparse.Namespace()):
@@ -27,6 +36,7 @@ class LiveStream(object):
             rate = maple.RATE,
             input = True,
             frames_per_buffer = maple.CHUNK,
+            input_device_index = get_mic_index()
         )
 
         return self
