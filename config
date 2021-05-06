@@ -1,6 +1,6 @@
 [general]
 # microphone
-microphone = Built-in Microphone
+microphone = USB PnP Audio Device
 #microphone = Built-in Microphone
 # Recalibrate after this many minutes has passed
 recalibration_rate = 10000
