@@ -136,8 +136,8 @@ class Monitor(object):
 
         # Event detection parameters
         self.event_start_threshold = 3 # standard deviations above background noise to start an event
-        self.event_end_threshold = 2 # standard deviations above background noise to end an event
-        self.seconds = 0.5
+        self.event_end_threshold = 3 # standard deviations above background noise to end an event
+        self.seconds = 0.3
         self.num_consecutive = 5
 
         self.timer = None
