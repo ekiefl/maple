@@ -50,16 +50,16 @@ Type "help", "copyright", "credits" or "license" for more information.
 Install all of the dependencies:
 
 ```
-conda install -c conda-forge python-sounddevice
-conda install -c anaconda pyaudio
-conda install numpy
-conda install pandas
-conda install scipy
-conda install scikit-learn
-conda install matplotlib
-conda install plotly
-conda install -c conda-forge tabulate
-conda install -c anaconda joblib
+conda install -y -c conda-forge python-sounddevice
+conda install -y -c anaconda pyaudio
+conda install -y numpy
+conda install -y pandas
+conda install -y scipy
+conda install -y scikit-learn
+conda install -y matplotlib
+conda install -y plotly
+conda install -y -c conda-forge tabulate
+conda install -y -c anaconda joblib
 pip install noisereduce
 ```
 
@@ -89,7 +89,7 @@ Verify your installation works by activating your conda environment once more:
 conda activate maple
 ```
 
-Then, record your first session:
+`maple` is now a binary that can be run from anywhere in your filesystem. Time to test your installation by recording your first session:
 
 ```
 maple run
