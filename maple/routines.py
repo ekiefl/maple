@@ -6,12 +6,10 @@ import maple.audio as audio
 import maple.utils as utils
 import maple.events as events
 
-from maple.data import DataBase, SessionAnalysis
+from maple.data import DataBase
 from maple.classifier import Classifier
 from maple.owner_recordings import OwnerRecordings
 
-import time
-import numpy as np
 import pandas as pd
 import argparse
 import datetime
@@ -213,7 +211,7 @@ class Analysis(object):
 
         # Enter interactive session
         ss = self.session
-        import ipdb; ipdb.set_trace()
+        import pdb; pdb.set_trace()
 
 
     def psd(self, session, ids=None):
