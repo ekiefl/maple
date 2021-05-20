@@ -31,7 +31,7 @@ def get_mic_id():
     except:
         mic_names = ", ".join(["'" + x + "'" for x in list(mics.keys())])
         raise ValueError(f"Couldn't find the mic '{maple.config['general']['microphone']}'. Here are the mics that "
-                         f"exist: {mic_names}")
+                         f"exist: {mic_names}. Replace the appropriate content in {maple.config_path} with your prefered mic.")
 
 
 def calc_energy(data):
