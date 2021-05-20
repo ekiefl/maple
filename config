@@ -1,7 +1,6 @@
 [general]
 # microphone
-microphone = USB PnP Audio Device
-#microphone = Built-in Microphone
+microphone = Built-in Microphone
 # Recalibrate after this many minutes has passed
 recalibration_rate = 10000
 # Store events into DB whenever this many dog events occur. No reason to set this lower than 100
