@@ -1,10 +1,10 @@
 #! /usr/bin/env python
 
 import maple
-import maple.data as data
 import maple.routines as routines
 import maple.classifier as classifier
 
+import sys
 import argparse
 
 if __name__ == '__main__':
@@ -39,15 +39,19 @@ if __name__ == '__main__':
     for section in maple.config:
         d.update(maple.config[section])
 
-    if args.mode == 'run':
-        routines.MonitorDog(args).run()
-    elif args.mode == 'analyze':
-        routines.Analysis(args).run()
-    elif args.mode == 'record':
-        routines.RecordOwnerVoice(args).run()
-    elif args.mode == 'label':
-        classifier.LabelAudio(args).run()
-    elif args.mode == 'train':
-        classifier.Train(args).run()
-    elif args.mode == 'classify':
-        classifier.Classify(args).run()
+    try:
+        if args.mode == 'run':
+            routines.MonitorDog(args).run()
+        elif args.mode == 'analyze':
+            routines.Analysis(args).run()
+        elif args.mode == 'record':
+            routines.RecordOwnerVoice(args).run()
+        elif args.mode == 'label':
+            classifier.LabelAudio(args).run()
+        elif args.mode == 'train':
+            classifier.Train(args).run()
+        elif args.mode == 'classify':
+            classifier.Classify(args).run()
+    except Exception as e:
+        print(e)
+        sys.exit(1)
