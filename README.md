@@ -10,11 +10,7 @@ The development of this entire project has been meticulously blogged and can be 
 
 ## Dependencies
 
-### conda
-
 The installation instructions assume you have [conda](https://conda.io/projects/conda/en/latest/user-guide/install/index.html). conda isn't a requirement for installing, but if you don't want to use it, you're on your own.
-
-### portaudio
 
 A primary module is `pyaudio`, which has `portaudio` as a dependency. If you're MacOS and aren't
 averse to `brew`, you can easily install `portaudio` with
@@ -83,17 +79,11 @@ export PATH=\$PATH:$(pwd)/bin
 EOF
 ```
 
-Verify your installation works by activating your conda environment once more:
-
-```
-conda activate maple
-```
-
-`maple` is now a binary that can be run from anywhere in your filesystem. Time to test your installation by recording your first session:
+Upon activating your conda environment once more (`conda activate maple`), `maple` is now a binary
+that can be run anywhere in your filesystem whenever you are in the `maple` conda environment. Time
+to test your installation by recording your first session:
 
 ```
 maple run
 ```
-
-
 
