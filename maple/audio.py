@@ -4,7 +4,7 @@ import maple
 import sounddevice as sd
 
 import numpy as np
-import noisereduce as nr
+import noisereduce.noisereducev1 as nr
 import scipy.signal as signal
 import matplotlib.pyplot as plt
 
