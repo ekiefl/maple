@@ -1,0 +1,15 @@
+sounddevice
+pyaudio
+noisereduce
+numpy
+pandas
+scipy
+sklearn
+matplotlib
+plotly
+joblib
+tabulate
+
+#brew install portaudio
+#https://stackoverflow.com/questions/33513522/when-installing-pyaudio-pip-cannot-find-portaudio-h-in-usr-local-include
+
