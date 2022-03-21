@@ -186,6 +186,7 @@ class Analysis(object):
         self.path = A('path')
         self.temp = A('temp')
         self.list = A('list')
+        self.interactive = A('interactive')
 
         self.bin_size = A('bin_size')
 
@@ -212,8 +213,9 @@ class Analysis(object):
         self.histogram(self.session)
 
         # Enter interactive session
-        ss = self.session
-        import ipdb; ipdb.set_trace()
+        if self.interactive:
+            ss = self.session
+            import ipdb; ipdb.set_trace()
 
 
     def psd(self, session, ids=None):

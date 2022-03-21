@@ -9,7 +9,7 @@ max_buffer_size = 100
 
 [respond]
 # Should the owner praise?
-praise = 1
+praise = 0
 # The timeframe when considering if to praise (minutes)
 praise_response_window = 2
 # The max number of events that should be within timeframe to consider praising
@@ -19,13 +19,13 @@ praise_max_pressure_sum = 0.01
 # After praising, wait this many minutes to consider praising again.
 praise_cooldown = 5
 # Should the owner scold?
-scold = 1
+scold = 0
 # The timeframe when considering if to scold (minutes)
 scold_response_window = 1.0
 # The pressure sum of the event required to trigger scolding
 scold_trigger = 0.25
 # The number of door scratches in window to trigger scolding
-scold_scratch_door_count = 5
+scold_scratch_door_count = 8
 # The number of barks in window to consider scolding
 scold_bark_count = 10
 # The last N events that should be barks to consider scolding
